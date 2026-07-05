@@ -272,6 +272,33 @@ export default function JobCardFormModal({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
+              {/* Mechanical Referral Toggle */}
+              <View style={{ backgroundColor: isDark ? '#2e1065' : '#faf5ff', borderWidth: 1, borderColor: isDark ? '#6d28d9' : '#ddd6fe', padding: 14, marginBottom: 14 }}>
+                <Text style={{ fontWeight: '800', fontSize: 13, color: isDark ? '#c4b5fd' : '#5b21b6', marginBottom: 10 }}>🔧 Mechanical Referral</Text>
+                {formData.linkedJobId ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontSize: 18 }}>🔗</Text>
+                    <View>
+                      <Text style={{ fontWeight: '800', color: isDark ? '#c4b5fd' : '#5b21b6', fontSize: 12 }}>Already referred to Visco Mechanical</Text>
+                      {formData.linkedJobCardNo ? <Text style={{ fontSize: 11, color: '#7c3aed' }}>Mechanical Job: {formData.linkedJobCardNo}</Text> : null}
+                    </View>
+                  </View>
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontWeight: '700', color: isDark ? '#ddd6fe' : '#4c1d95', fontSize: 12 }}>Refer to Visco Mechanical Workshop</Text>
+                      <Text style={{ fontSize: 10, color: isDark ? '#6b7280' : '#9ca3af', marginTop: 2 }}>Creates a linked job in Mechanical app</Text>
+                    </View>
+                    <Switch
+                      value={formData.referToMechanical || false}
+                      onValueChange={(v) => setFormData({ ...formData, referToMechanical: v })}
+                      trackColor={{ true: '#7c3aed', false: isDark ? '#374151' : '#d1d5db' }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                )}
+              </View>
+
               <View style={S.voiceContainer}>
                 <Text style={S.formInputLabel}>Customer Voice (Complaints)</Text>
                 <View style={{ flexDirection: 'row', gap: 15, marginVertical: 10 }}>

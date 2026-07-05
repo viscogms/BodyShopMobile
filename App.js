@@ -455,16 +455,17 @@ export default function App() {
     const finalData     = { ...formData, carModel: mixedModelText, customerName: formattedName, customerContacts: validContacts, invoiceAmount: Number(formData.invoiceAmount || 0), paidAmount: Number(formData.paidAmount || 0), rearImage: formData.rearImage.filter(img => img && String(img).trim() !== '').join(','), vinImage: formData.vinImage.filter(img => img && String(img).trim() !== '').join(','), odoImage: formData.odoImage.filter(img => img && String(img).trim() !== '').join(','), inspectionPhotos: formData.inspectionPhotos.filter(img => img && String(img).trim() !== '').join(','), customerVoice: finalCustomerVoice, inspectionDetails: finalInspectionDetails, paymentStatus: pStatus };
     try {
       setLoading(true);
+      let savedCard;
       if (isEditing) {
-        // Edit: update card in state, then sync from backend
         const res = await axios.put(`${API_URL}/${editId}`, finalData);
+        savedCard = res.data;
         setJobCards(prev => prev.map(c => c._id === editId ? res.data : c));
-        fetchJobCards(1, ''); // sync after edit
+        fetchJobCards(1, '');
       } else {
-        // New / Clone: prepend to TOP + pin to top
         const res = await axios.post(API_URL, finalData);
+        savedCard = res.data;
         setJobCards(prev => [res.data, ...prev]);
-        setPinnedCardId(res.data._id); // ✅ Sort ekata depend nowanawa — always top
+        setPinnedCardId(res.data._id);
         fetchFinanceAndParts();
       }
       setShowForm(false);

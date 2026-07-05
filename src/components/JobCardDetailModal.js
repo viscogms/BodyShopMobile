@@ -200,6 +200,18 @@ export default function JobCardDetailModal({
           {hasPerm('canDeleteCard') && <TouchableOpacity style={[S.actionBtnFull, { backgroundColor: '#dc2626' }]} onPress={() => Alert.alert("Delete", "Delete this Job Card?", [{ text: "Cancel" }, { text: "Delete", onPress: () => handleDelete(selectedCard._id) }])}><Text style={S.btnText}>🗑️ Delete</Text></TouchableOpacity>}
         </View>
 
+        {/* Mechanical Referral Banner */}
+        {selectedCard.linkedJobId && (
+          <View style={{ flexDirection:'row', alignItems:'center', gap:10, backgroundColor: isDark?'#2e1065':'#faf5ff', borderBottomWidth:1, borderBottomColor: isDark?'#6d28d9':'#ddd6fe', padding:12 }}>
+            <Text style={{ fontSize:20 }}>🔗</Text>
+            <View style={{ flex:1 }}>
+              <Text style={{ fontWeight:'800', fontSize:12, color: isDark?'#c4b5fd':'#5b21b6' }}>Linked to {selectedCard.linkedAppName||'Visco Mechanical'}</Text>
+              {selectedCard.linkedJobCardNo ? <Text style={{ fontSize:11, color:'#7c3aed' }}>Job Card: {selectedCard.linkedJobCardNo}</Text> : null}
+            </View>
+            <Text style={{ fontSize:10, color:'#9ca3af' }}>Open Mechanical app ↗</Text>
+          </View>
+        )}
+
         {/* Detail Tabs */}
         <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: C.border, backgroundColor: isDark ? '#0f1117' : '#fff' }}>
           {[['info','📋 Details'],['inspection','🔍 Inspection']].map(([t,l]) => (
