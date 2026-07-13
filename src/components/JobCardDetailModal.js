@@ -117,7 +117,7 @@ export default function JobCardDetailModal({
   setDropdownMode, setShowStatusDropdown, printInspectionReportPDF,
   setFullScreenImg, handleTogglePartReceived, requestPricingWhatsApp,
   formatSafeDate, initiateDirectReminderUpdate, handleToggleVoiceCompleted,
-  isDark = false
+  isDark = false, usersList = []
 }) {
   if (!selectedCard) return null;
 
@@ -229,6 +229,7 @@ export default function JobCardDetailModal({
               onCardUpdate={(updated) => setSelectedCard(updated)}
               canEdit={hasPerm('canEditCard')}
               isDark={isDark}
+              usersList={usersList}
             />
           </ScrollView>
         )}

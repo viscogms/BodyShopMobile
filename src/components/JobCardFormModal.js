@@ -31,6 +31,7 @@ export default function JobCardFormModal({
   const customPartsRefs = useRef([]);
   const [showPrefixDropdown, setShowPrefixDropdown] = React.useState(false);
   const [showMechanicPicker, setShowMechanicPicker] = React.useState(false);
+  const [showTechPicker,     setShowTechPicker]     = React.useState(false);
   const S = getStyles(isDark);
   const C = isDark
     ? require('../utils/AppStyles').COLORS.dark
@@ -174,7 +175,11 @@ export default function JobCardFormModal({
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={S.formInputLabel}>Inspection Tech</Text>
-                  <TextInput style={S.input} placeholder="Tech Name" placeholderTextColor={C.textSub} value={formData.inspectionTech} onChangeText={(v) => setFormData({ ...formData, inspectionTech: toTitleCase(v) })} />
+                  <TouchableOpacity style={[S.input, { justifyContent: 'center' }]} onPress={() => setShowTechPicker(true)}>
+                    <Text style={{ color: formData.inspectionTech ? C.text : C.textSub, fontSize: 14 }}>
+                      {formData.inspectionTech || 'Select Tech ▼'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={S.formInputLabel}>Assigned Mechanic</Text>
@@ -185,6 +190,37 @@ export default function JobCardFormModal({
                   </TouchableOpacity>
                 </View>
               </View>
+
+              {/* Inspection Tech picker modal */}
+              <Modal visible={showTechPicker} transparent animationType="fade" onRequestClose={() => setShowTechPicker(false)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 30 }}>
+                  <View style={{ backgroundColor: isDark ? '#1a1f2e' : '#fff', borderRadius: 14, padding: 20, maxHeight: 400 }}>
+                    <Text style={{ fontWeight: '800', fontSize: 16, color: C.text, marginBottom: 14 }}>Select Inspection Tech</Text>
+                    <ScrollView>
+                      {usersList.filter(u => u.isActive !== false).map((u, i) => (
+                        <TouchableOpacity key={i} style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                          onPress={() => { setFormData({ ...formData, inspectionTech: u.name }); setShowTechPicker(false); }}>
+                          <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: C.accent, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{(u.name || '?')[0].toUpperCase()}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '700', color: C.text }}>{u.name}</Text>
+                            <Text style={{ fontSize: 11, color: C.textSub }}>{u.role}</Text>
+                          </View>
+                          {formData.inspectionTech === u.name && <Text style={{ marginLeft: 'auto', color: C.accent, fontWeight: '800' }}>✓</Text>}
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: C.border }}
+                        onPress={() => { setFormData({ ...formData, inspectionTech: '' }); setShowTechPicker(false); }}>
+                        <Text style={{ color: '#ef4444', fontWeight: '700' }}>✕  Clear Selection</Text>
+                      </TouchableOpacity>
+                    </ScrollView>
+                    <TouchableOpacity style={{ marginTop: 14, alignSelf: 'flex-end' }} onPress={() => setShowTechPicker(false)}>
+                      <Text style={{ color: C.textSub, fontWeight: '700' }}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
 
               {/* Mechanic picker modal */}
               <Modal visible={showMechanicPicker} transparent animationType="fade" onRequestClose={() => setShowMechanicPicker(false)}>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator, Linking, Modal } from 'react-native';
 import axios from 'axios';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -154,7 +154,7 @@ function ChecklistSection({ items, sectionKey, onUpdate, canEdit, isDark }) {
 }
 
 // ── Main Component ───────────────────────────────────────────────
-export default function InspectionReportTab({ card, onCardUpdate, canEdit, isDark = false }) {
+export default function InspectionReportTab({ card, onCardUpdate, canEdit, isDark = false, usersList = [] }) {
   const [report, setReport] = useState(() => {
     const def = makeDefault();
     if (!card.inspectionReport) return def;
@@ -167,8 +167,9 @@ export default function InspectionReportTab({ card, onCardUpdate, canEdit, isDar
       chassis:          card.inspectionReport.chassis          || def.chassis,
     };
   });
-  const [saving,  setSaving]  = useState(false);
-  const [openSec, setOpenSec] = useState('tyres');
+  const [saving,        setSaving]        = useState(false);
+  const [openSec,       setOpenSec]       = useState('tyres');
+  const [showInspPicker, setShowInspPicker] = useState(false);
 
   const bg  = isDark ? '#0f1117' : '#f9fbff';
   const txt = isDark ? '#fff'    : '#111';
@@ -334,7 +335,43 @@ export default function InspectionReportTab({ card, onCardUpdate, canEdit, isDar
 
       {/* Inspector info */}
       <Text style={{ fontSize: 10, fontWeight: '700', color: '#16a34a', marginBottom: 3 }}>INSPECTOR NAME</Text>
-      {inp(report.inspectorName, v => setReport(r => ({ ...r, inspectorName: v })), 'Inspector name')}
+      <TouchableOpacity
+        style={{ borderWidth: 1, borderColor: isDark ? '#374151' : '#d1d5db', padding: 8, backgroundColor: isDark ? '#1f2937' : '#fff', marginBottom: 4 }}
+        onPress={() => canEdit && setShowInspPicker(true)}
+      >
+        <Text style={{ fontSize: 12, color: report.inspectorName ? txt : '#9ca3af' }}>
+          {report.inspectorName || 'Select Inspector ▼'}
+        </Text>
+      </TouchableOpacity>
+      <Modal visible={showInspPicker} transparent animationType="fade" onRequestClose={() => setShowInspPicker(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 30 }}>
+          <View style={{ backgroundColor: isDark ? '#1a1f2e' : '#fff', borderRadius: 14, padding: 20, maxHeight: 400 }}>
+            <Text style={{ fontWeight: '800', fontSize: 16, color: txt, marginBottom: 14 }}>Select Inspector</Text>
+            <ScrollView>
+              {usersList.filter(u => u.isActive !== false).map((u, i) => (
+                <TouchableOpacity key={i} style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb', flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                  onPress={() => { setReport(r => ({ ...r, inspectorName: u.name })); setShowInspPicker(false); }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#16a34a', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>{(u.name || '?')[0].toUpperCase()}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ fontWeight: '700', color: txt }}>{u.name}</Text>
+                    <Text style={{ fontSize: 11, color: '#6b7280' }}>{u.role}</Text>
+                  </View>
+                  {report.inspectorName === u.name && <Text style={{ marginLeft: 'auto', color: '#16a34a', fontWeight: '800' }}>✓</Text>}
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={{ paddingVertical: 12, borderBottomWidth: 1, borderColor: isDark ? '#374151' : '#e5e7eb' }}
+                onPress={() => { setReport(r => ({ ...r, inspectorName: '' })); setShowInspPicker(false); }}>
+                <Text style={{ color: '#ef4444', fontWeight: '700' }}>✕  Clear Selection</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <TouchableOpacity style={{ marginTop: 14, alignSelf: 'flex-end' }} onPress={() => setShowInspPicker(false)}>
+              <Text style={{ color: '#6b7280', fontWeight: '700' }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <Text style={{ fontSize: 10, fontWeight: '700', color: '#16a34a', marginBottom: 3, marginTop: 6 }}>INSPECTION DATE</Text>
       {inp(report.inspectionDate, v => setReport(r => ({ ...r, inspectionDate: v })), 'YYYY-MM-DD')}
 
