@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Modal, Alert, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 import { API_BASE } from '../utils/config';
@@ -37,7 +37,7 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
 
     const headers = { 'x-api-key': API_KEY };
 
-    const fetchDaily = useCallback(async (d) => {
+    const fetchDaily = async (d) => {
         if (!staffList.length) return;
         setLoading(true);
         try {
@@ -57,16 +57,16 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
             }));
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
-    }, [staffList]);
+    };
 
-    const fetchMonthly = useCallback(async (m) => {
+    const fetchMonthly = async (m) => {
         setLoading(true);
         try {
             const res = await axios.get(`${API_BASE}/attendance?month=${m}`, { headers });
             setRecords(Array.isArray(res.data) ? res.data : []);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
-    }, []);
+    };
 
     useEffect(() => {
         if (view === 'daily')   fetchDaily(date);
