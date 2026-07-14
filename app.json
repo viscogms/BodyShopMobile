@@ -38,6 +38,9 @@
         }
       ]
     ],
+    "updates": {
+      "checkAutomatically": "NEVER"
+    },
     "extra": {
       "eas": {
         "projectId": "f064bf74-a83a-48bc-94a0-053206800be5"
