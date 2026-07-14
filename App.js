@@ -113,6 +113,7 @@ export default function App() {
   const [hasMore,   setHasMore]   = useState(true);
 
   const [usersList,      setUsersList]      = useState([]);
+  const [staffList,      setStaffList]      = useState([]);
   const [activityLogs,   setActivityLogs]   = useState([]);
   const [allTodoCards,   setAllTodoCards]   = useState([]);
   const [dbPartsCatalog, setDbPartsCatalog] = useState([]);
@@ -273,7 +274,7 @@ export default function App() {
     try { const userData = await AsyncStorage.getItem('bodyshop_user'); if (userData) setCurrentUser(JSON.parse(userData)); }
     catch (e) { console.log("Auth check error"); } finally { setAuthChecking(false); }
   };
-  useEffect(() => { if (currentUser) { fetchJobCards(1, ''); fetchFinanceAndParts(); fetchAllTodos(); axios.get(`${API_BASE}/users`).then(r => setUsersList(Array.isArray(r.data) ? r.data : [])).catch(() => {}); } }, [currentUser]);
+  useEffect(() => { if (currentUser) { fetchJobCards(1, ''); fetchFinanceAndParts(); fetchAllTodos(); axios.get(`${API_BASE}/users`).then(r => setUsersList(Array.isArray(r.data) ? r.data : [])).catch(() => {}); axios.get(`${API_BASE}/staff`).then(r => setStaffList(Array.isArray(r.data) ? r.data.map(s => ({...s, role: s.category})) : [])).catch(() => {}); } }, [currentUser]);
 
   useEffect(() => {
     const backAction = () => {
@@ -860,7 +861,7 @@ export default function App() {
         )}
 
         {/* ── MODALS ──────────────────────────────────────── */}
-        <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} isDark={isDark} usersList={usersList} />
+        <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} isDark={isDark} usersList={staffList} />
 
         <JobCardFormModal showForm={showForm} setShowForm={setShowForm} isEditing={isEditing} handleSave={handleSave} loading={loading} formTab={formTab} setFormTab={setFormTab} formData={formData} setFormData={setFormData} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} showJobCardDatePicker={showJobCardDatePicker} setShowJobCardDatePicker={setShowJobCardDatePicker} showDeliveryDatePicker={showDeliveryDatePicker} setShowDeliveryDatePicker={setShowDeliveryDatePicker} tempDateObj={tempDateObj} setTempDateObj={setTempDateObj} showReminderDatePicker={showReminderDatePicker} setShowReminderDatePicker={setShowReminderDatePicker} showReminderTimePicker={showReminderTimePicker} setShowReminderTimePicker={setShowReminderTimePicker} renderImageSection={renderNewImageSection} openContactList={openContactList} quickVoice={quickVoice} setQuickVoice={setQuickVoice} updateDynamicList={updateDynamicList} activeNavGroup={activeNavGroup} setActiveNavGroup={setActiveNavGroup} activeNavSubGroup={activeNavSubGroup} setActiveNavSubGroup={setActiveNavSubGroup} dbPartsCatalog={dbPartsCatalog} partSelections={partSelections} toggleCatalogPart={toggleCatalogPart} customParts={customParts} updateDynamicCustomPart={updateDynamicCustomPart} removeCustomPart={removeCustomPart} usersList={usersList} isDark={isDark} />
 
