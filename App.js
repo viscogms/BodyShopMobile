@@ -120,7 +120,7 @@ export default function App() {
   const [totalActiveCount, setTotalActiveCount] = useState(0); // ← FIX 2: Add this state
   const [pinnedCardId, setPinnedCardId] = useState(null); // ✅ New/clone card top ekata pin karanawa
   const pinnedCardIdRef = useRef(null); // Async context eke access karanawa
-  const [adminPartTab,   setAdminPartTab]   = useState('users');
+  const [adminPartTab,   setAdminPartTab]   = useState('staff');
 
   const [newGroupName,          setNewGroupName]          = useState('');
   const [newSubGroupName,       setNewSubGroupName]       = useState('');
@@ -803,7 +803,7 @@ export default function App() {
             onCardPress={(card) => { setCurrentScreen('home'); setTimeout(() => setSelectedCard(card), 300); }}
           />
         ) : currentScreen === 'admin' ? (
-          <AdminScreen adminPartTab={adminPartTab} setAdminPartTab={setAdminPartTab} usersList={usersList} openNewUserModal={openNewUserModal} openEditUserModal={openEditUserModal} handleDeleteUser={handleDeleteUser} toggleUserActive={toggleUserActive} dbPartsCatalog={dbPartsCatalog} newGroupName={newGroupName} setNewGroupName={setNewGroupName} handleAddGroup={handleAddGroup} selectedAdminGroupId={selectedAdminGroupId} setSelectedAdminGroupId={setSelectedAdminGroupId} newItemName={newItemName} setNewItemName={setNewItemName} handleAddItem={handleAddItem} handleDeleteGroup={handleDeleteGroup} handleDeleteItem={handleDeleteItem} />
+          <AdminScreen adminPartTab={adminPartTab} setAdminPartTab={setAdminPartTab} dbPartsCatalog={dbPartsCatalog} newGroupName={newGroupName} setNewGroupName={setNewGroupName} handleAddGroup={handleAddGroup} selectedAdminGroupId={selectedAdminGroupId} setSelectedAdminGroupId={setSelectedAdminGroupId} newItemName={newItemName} setNewItemName={setNewItemName} handleAddItem={handleAddItem} handleDeleteGroup={handleDeleteGroup} handleDeleteItem={handleDeleteItem} onUsersChanged={setUsersList} />
         ) : currentScreen === 'settings' ? (
           <SettingsScreen currentUser={currentUser} setCurrentUser={setCurrentUser} newPassword={newPassword} setNewPassword={setNewPassword} changeProfilePic={changeProfilePic} handleProfileUpdate={handleProfileUpdate} />
         ) : (
