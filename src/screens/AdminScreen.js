@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Modal, Alert, ActivityIndicator } from 'react-native';
 import axios from 'axios';
 import { API_BASE } from '../utils/config';
@@ -13,6 +13,223 @@ const BLANK = () => ({
 });
 
 const BRAND = '#16a34a';
+
+const STATUSES_ATT = ['Present','Absent','Late','Half Day'];
+const STATUS_BG = { Present:'#dcfce7', Absent:'#fee2e2', Late:'#fef9c3', 'Half Day':'#dbeafe' };
+const STATUS_FG = { Present:'#15803d', Absent:'#dc2626', Late:'#854d0e', 'Half Day':'#1d4ed8' };
+
+function todayStr() {
+    const d = new Date(); const z = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+}
+function thisMonth() { return todayStr().slice(0,7); }
+
+function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
+    const [view,    setView]    = useState('daily');
+    const [date,    setDate]    = useState(todayStr());
+    const [month,   setMonth]   = useState(thisMonth());
+    const [rows,    setRows]    = useState([]);
+    const [records, setRecords] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [saving,  setSaving]  = useState(false);
+    const [dateInput, setDateInput] = useState(todayStr());
+    const [monthInput, setMonthInput] = useState(thisMonth());
+
+    const headers = { 'x-api-key': API_KEY };
+
+    const fetchDaily = useCallback(async (d) => {
+        if (!staffList.length) return;
+        setLoading(true);
+        try {
+            const res = await axios.get(`${API_BASE}/attendance?date=${d}`, { headers });
+            const existing = Array.isArray(res.data) ? res.data : [];
+            setRows(staffList.map(s => {
+                const rec = existing.find(r => r.staffId===s._id || r.staffName===s.name);
+                return {
+                    staffId: s._id, staffName: s.name, category: s.category,
+                    status:   rec?.status   || 'Present',
+                    timeIn:   rec?.timeIn   || '',
+                    timeOut:  rec?.timeOut  || '',
+                    overtime: rec?.overtime != null ? String(rec.overtime) : '0',
+                    notes:    rec?.notes    || '',
+                    saved:    !!rec,
+                };
+            }));
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, [staffList]);
+
+    const fetchMonthly = useCallback(async (m) => {
+        setLoading(true);
+        try {
+            const res = await axios.get(`${API_BASE}/attendance?month=${m}`, { headers });
+            setRecords(Array.isArray(res.data) ? res.data : []);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => {
+        if (view === 'daily')   fetchDaily(date);
+        if (view === 'monthly') fetchMonthly(month);
+    }, [view, date, month, staffList]);
+
+    const updateRow = (idx, field, val) => setRows(prev => prev.map((r,i) => i===idx ? {...r,[field]:val} : r));
+
+    const saveAll = async () => {
+        setSaving(true);
+        try {
+            await Promise.all(rows.map(row => axios.post(`${API_BASE}/attendance`, {
+                staffId: row.staffId, staffName: row.staffName, date,
+                status: row.status,
+                timeIn:  row.status==='Absent' ? '' : row.timeIn,
+                timeOut: row.status==='Absent' ? '' : row.timeOut,
+                overtime: Number(row.overtime)||0, notes: row.notes,
+            }, { headers })));
+            fetchDaily(date);
+            Alert.alert('Saved', 'Attendance saved successfully.');
+        } catch (e) { Alert.alert('Error', 'Failed to save attendance.'); }
+        finally { setSaving(false); }
+    };
+
+    const monthlyData = useMemo(() => {
+        const [y,m] = month.split('-').map(Number);
+        const days = new Date(y,m,0).getDate();
+        return staffList.map(s => {
+            const sRecs = records.filter(r => r.staffId===s._id || r.staffName===s.name);
+            const summary = { Present:0, Absent:0, Late:0, 'Half Day':0, overtime:0 };
+            const dayMap = {};
+            sRecs.forEach(r => {
+                const day = parseInt(r.date.split('-')[2]);
+                dayMap[day] = r;
+                summary[r.status] = (summary[r.status]||0)+1;
+                summary.overtime += r.overtime||0;
+            });
+            return { ...s, dayMap, summary, days };
+        });
+    }, [records, staffList, month]);
+
+    return (
+        <View>
+            <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+                {[['daily','📅 Daily'],['monthly','📊 Monthly']].map(([v,label]) => (
+                    <TouchableOpacity key={v} onPress={() => setView(v)}
+                        style={{ flex:1, padding:10, alignItems:'center', borderRadius:8,
+                            backgroundColor: view===v ? B : '#e2e8f0' }}>
+                        <Text style={{ fontWeight:'bold', fontSize:12, color: view===v ? '#fff' : '#64748b' }}>{label}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginBottom:12 }}>
+                <Text style={{ fontSize:12, color:'#64748b', fontWeight:'bold' }}>{view==='daily' ? 'Date:' : 'Month:'}</Text>
+                <TextInput
+                    style={{ flex:1, borderWidth:1, borderColor:'#e2e8f0', borderRadius:8, padding:8, fontSize:13, backgroundColor:'#fff', color:'#1e293b' }}
+                    value={view==='daily' ? dateInput : monthInput}
+                    placeholder={view==='daily' ? 'YYYY-MM-DD' : 'YYYY-MM'}
+                    onChangeText={v => { if(view==='daily') setDateInput(v); else setMonthInput(v); }}
+                    onEndEditing={() => { if(view==='daily' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) setDate(dateInput); if(view==='monthly' && /^\d{4}-\d{2}$/.test(monthInput)) setMonth(monthInput); }}
+                />
+                <TouchableOpacity onPress={() => { if(view==='daily') { setDate(dateInput); fetchDaily(dateInput); } else { setMonth(monthInput); fetchMonthly(monthInput); } }}
+                    style={{ backgroundColor:B, paddingHorizontal:14, paddingVertical:9, borderRadius:8 }}>
+                    <Text style={{ color:'#fff', fontWeight:'bold', fontSize:12 }}>Go</Text>
+                </TouchableOpacity>
+            </View>
+
+            {loading && <ActivityIndicator color={B} style={{ marginVertical:20 }} />}
+
+            {view==='daily' && !loading && (
+                <View>
+                    {rows.length===0 && <Text style={{textAlign:'center',color:'#94a3b8',marginVertical:20}}>No staff found.</Text>}
+                    {rows.map((row, idx) => (
+                        <View key={row.staffId} style={{ backgroundColor:'#fff', borderRadius:10, padding:12, marginBottom:10, borderLeftWidth:4, borderLeftColor: row.saved ? '#22c55e' : '#e2e8f0', elevation:1 }}>
+                            <Text style={{ fontWeight:'bold', fontSize:14, color:'#1e293b' }}>{row.staffName}</Text>
+                            <Text style={{ fontSize:11, color:'#94a3b8', marginBottom:8 }}>{row.category}</Text>
+                            <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+                                {STATUSES_ATT.map(s => (
+                                    <TouchableOpacity key={s} onPress={() => updateRow(idx,'status',s)}
+                                        style={{ paddingHorizontal:10, paddingVertical:4, borderRadius:6,
+                                            backgroundColor: row.status===s ? STATUS_BG[s] : '#f1f5f9' }}>
+                                        <Text style={{ fontSize:11, fontWeight:'bold', color: row.status===s ? STATUS_FG[s] : '#64748b' }}>{s}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            {row.status!=='Absent' && (
+                                <View style={{ flexDirection:'row', gap:8, flexWrap:'wrap' }}>
+                                    <View style={{ flex:1, minWidth:100 }}>
+                                        <Text style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>TIME IN (HH:MM)</Text>
+                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
+                                            value={row.timeIn} placeholder="08:00" onChangeText={v => updateRow(idx,'timeIn',v)} />
+                                    </View>
+                                    <View style={{ flex:1, minWidth:100 }}>
+                                        <Text style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>TIME OUT (HH:MM)</Text>
+                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
+                                            value={row.timeOut} placeholder="17:00" onChangeText={v => updateRow(idx,'timeOut',v)} />
+                                    </View>
+                                    <View style={{ width:80 }}>
+                                        <Text style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>OT HRS</Text>
+                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
+                                            value={row.overtime} placeholder="0" keyboardType="numeric" onChangeText={v => updateRow(idx,'overtime',v)} />
+                                    </View>
+                                </View>
+                            )}
+                            {row.status==='Absent' && (
+                                <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b', marginTop:4 }}
+                                    value={row.notes} placeholder="Reason (optional)" onChangeText={v => updateRow(idx,'notes',v)} />
+                            )}
+                        </View>
+                    ))}
+                    {rows.length>0 && (
+                        <TouchableOpacity onPress={saveAll} disabled={saving}
+                            style={{ backgroundColor:B, padding:14, borderRadius:10, alignItems:'center', marginTop:4, opacity:saving?0.6:1 }}>
+                            <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>{saving ? 'Saving...' : '💾 Save All Attendance'}</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+            )}
+
+            {view==='monthly' && !loading && (
+                <View>
+                    <View style={{ flexDirection:'row', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+                        {['Present','Absent','Late','Half Day'].map(s => (
+                            <View key={s} style={{ flex:1, minWidth:70, backgroundColor:STATUS_BG[s], borderRadius:10, padding:10, alignItems:'center' }}>
+                                <Text style={{ fontSize:20, fontWeight:'900', color:STATUS_FG[s] }}>{records.filter(r=>r.status===s).length}</Text>
+                                <Text style={{ fontSize:10, fontWeight:'bold', color:STATUS_FG[s] }}>{s}</Text>
+                            </View>
+                        ))}
+                    </View>
+                    {monthlyData.map(s => (
+                        <View key={s._id} style={{ backgroundColor:'#fff', borderRadius:10, padding:12, marginBottom:10, elevation:1 }}>
+                            <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                                <View>
+                                    <Text style={{ fontWeight:'bold', fontSize:14, color:'#1e293b' }}>{s.name}</Text>
+                                    <Text style={{ fontSize:11, color:'#94a3b8' }}>{s.category}</Text>
+                                </View>
+                                <View style={{ flexDirection:'row', gap:6 }}>
+                                    <Text style={{ fontSize:11, fontWeight:'bold', color:'#15803d' }}>P:{s.summary.Present||0}</Text>
+                                    <Text style={{ fontSize:11, fontWeight:'bold', color:'#dc2626' }}>A:{s.summary.Absent||0}</Text>
+                                    <Text style={{ fontSize:11, fontWeight:'bold', color:'#854d0e' }}>L:{s.summary.Late||0}</Text>
+                                    {s.summary.overtime>0 && <Text style={{ fontSize:11, fontWeight:'bold', color:B }}>OT:{s.summary.overtime}h</Text>}
+                                </View>
+                            </View>
+                            <View style={{ flexDirection:'row', flexWrap:'wrap', gap:4 }}>
+                                {Array.from({length:s.days},(_,i)=>i+1).map(day => {
+                                    const rec = s.dayMap[day];
+                                    return (
+                                        <View key={day} style={{ width:28, height:28, borderRadius:4, alignItems:'center', justifyContent:'center',
+                                            backgroundColor: rec ? STATUS_BG[rec.status] : '#f1f5f9' }}>
+                                            <Text style={{ fontSize:9, fontWeight:'bold', color: rec ? STATUS_FG[rec.status] : '#94a3b8' }}>{day}</Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        </View>
+                    ))}
+                    {monthlyData.length===0 && <Text style={{textAlign:'center',color:'#94a3b8',marginVertical:20}}>No records this month.</Text>}
+                </View>
+            )}
+        </View>
+    );
+}
 
 export default function AdminScreen({
     adminPartTab, setAdminPartTab,
@@ -173,6 +390,9 @@ export default function AdminScreen({
             <View style={S.tabRow}>
                 <TouchableOpacity style={[S.tabBtn, adminPartTab==='staff' && S.tabBtnActive]} onPress={() => setAdminPartTab('staff')}>
                     <Text style={[S.tabTxt, adminPartTab==='staff' && {color:BRAND}]}>👥 Staff</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[S.tabBtn, adminPartTab==='attendance' && S.tabBtnActive]} onPress={() => setAdminPartTab('attendance')}>
+                    <Text style={[S.tabTxt, adminPartTab==='attendance' && {color:BRAND}]}>📅 Attendance</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[S.tabBtn, adminPartTab==='parts' && S.tabBtnActive]} onPress={() => setAdminPartTab('parts')}>
                     <Text style={[S.tabTxt, adminPartTab==='parts' && {color:BRAND}]}>⚙️ Parts</Text>
@@ -363,6 +583,10 @@ export default function AdminScreen({
                         </ScrollView>
                     </Modal>
                 </View>
+            )}
+
+            {adminPartTab === 'attendance' && (
+                <AttendanceSection staffList={staffList} BRAND={BRAND} API_KEY="BodyShopApp_SuperSecretKey_2026" />
             )}
 
             {adminPartTab === 'parts' && (
