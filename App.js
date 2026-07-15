@@ -275,7 +275,56 @@ export default function App() {
     try { const userData = await AsyncStorage.getItem('bodyshop_user'); if (userData) setCurrentUser(JSON.parse(userData)); }
     catch (e) { console.log("Auth check error"); } finally { setAuthChecking(false); }
   };
-  useEffect(() => { if (currentUser) { fetchJobCards(1, ''); fetchFinanceAndParts(); fetchAllTodos(); axios.get(`${API_BASE}/users`).then(r => setUsersList(Array.isArray(r.data) ? r.data : [])).catch(() => {}); axios.get(`${API_BASE}/staff`).then(r => setStaffList(Array.isArray(r.data) ? r.data.map(s => ({...s, role: s.category})) : [])).catch(() => {}); } }, [currentUser]);
+  const eveningAlertShown = useRef(false);
+  const mondayAlertShown  = useRef(false);
+  const [sundayDate, setSundayDate] = useState(null);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchJobCards(1, ''); fetchFinanceAndParts(); fetchAllTodos();
+    axios.get(`${API_BASE}/users`).then(r => setUsersList(Array.isArray(r.data) ? r.data : [])).catch(() => {});
+    axios.get(`${API_BASE}/staff`).then(r => {
+      const list = Array.isArray(r.data) ? r.data.map(s => ({...s, role: s.category})) : [];
+      setStaffList(list);
+      checkDailyReminders(list);
+    }).catch(() => {});
+  }, [currentUser]);
+
+  const checkDailyReminders = async (list) => {
+    if (!list.length) return;
+    const now = new Date();
+    const day = now.getDay();
+    const z = n => String(n).padStart(2,'0');
+    const todayD = `${now.getFullYear()}-${z(now.getMonth()+1)}-${z(now.getDate())}`;
+    const headers = { 'x-api-key': API_KEY };
+    if (day === 1 && !mondayAlertShown.current) {
+      mondayAlertShown.current = true;
+      Alert.alert('📅 Sunday Check', 'Did staff work last Sunday?', [
+        { text: 'No', style: 'cancel' },
+        { text: 'Yes — Mark Sunday', onPress: () => {
+          const sun = new Date(now); sun.setDate(sun.getDate() - 1);
+          setSundayDate(`${sun.getFullYear()}-${z(sun.getMonth()+1)}-${z(sun.getDate())}`);
+        }},
+      ]);
+    }
+    const after630 = now.getHours() > 18 || (now.getHours() === 18 && now.getMinutes() >= 30);
+    if (after630 && day !== 0 && !eveningAlertShown.current) {
+      eveningAlertShown.current = true;
+      try {
+        const res = await axios.get(`${API_BASE}/attendance?date=${todayD}`, { headers });
+        const existing = Array.isArray(res.data) ? res.data : [];
+        const noOut = existing.filter(r => r.status !== 'Absent' && !r.timeOut);
+        if (noOut.length > 0) {
+          Alert.alert('⏰ End of Day', `${noOut.length} staff have no time-out. Mark all as 18:30?`, [
+            { text: 'Skip', style: 'cancel' },
+            { text: 'Mark 18:30', onPress: async () => {
+              await Promise.all(noOut.map(r => axios.post(`${API_BASE}/attendance`, { ...r, timeOut: '18:30' }, { headers })));
+            }},
+          ]);
+        }
+      } catch (_) {}
+    }
+  };
 
   useEffect(() => {
     const backAction = () => {
@@ -862,7 +911,7 @@ export default function App() {
         )}
 
         {/* ── MODALS ──────────────────────────────────────── */}
-        <AttendanceReminderModal staffList={staffList} BRAND="#16a34a" apiKey={API_KEY} />
+        <AttendanceReminderModal staffList={staffList} BRAND="#16a34a" apiKey={API_KEY} forDate={sundayDate || undefined} />
 
         <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} isDark={isDark} usersList={staffList} />
 

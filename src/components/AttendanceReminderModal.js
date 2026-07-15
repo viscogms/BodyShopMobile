@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Modal, Alert, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Modal, Alert, ScrollView, StyleSheet, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
 import { API_BASE } from '../utils/config';
 
@@ -12,7 +13,19 @@ function todayStr() {
     return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
 }
 
-export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', apiKey }) {
+function timeStr(date) {
+    const z = n => String(n).padStart(2,'0');
+    return `${z(date.getHours())}:${z(date.getMinutes())}`;
+}
+
+function strToDate(hhmm) {
+    const [h, m] = (hhmm || '00:00').split(':').map(Number);
+    const d = new Date(); d.setHours(h, m, 0, 0);
+    return d;
+}
+
+// forDate: optional date string (YYYY-MM-DD) to mark attendance for a different day (e.g. Sunday)
+export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', apiKey, forDate }) {
     const [visible,   setVisible]   = useState(false);
     const [queue,     setQueue]     = useState([]);
     const [step,      setStep]      = useState(0);
@@ -20,8 +33,13 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
     const [saving,    setSaving]    = useState(false);
     const [checked,   setChecked]   = useState(false);
 
+    // Time picker state
+    const [showPicker,   setShowPicker]   = useState(false);
+    const [pickerTarget, setPickerTarget] = useState('timeIn'); // 'timeIn' | 'timeOut'
+    const [pickerDate,   setPickerDate]   = useState(new Date());
+
     const headers = { 'x-api-key': apiKey };
-    const today   = todayStr();
+    const targetDate = forDate || todayStr();
 
     function blankForm() {
         return { status: 'Present', timeIn: '', timeOut: '', overtime: '0', notes: '' };
@@ -32,18 +50,26 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
         checkAndPrompt();
     }, [staffList]);
 
+    // If forDate changes externally (Sunday flow), re-trigger
+    useEffect(() => {
+        if (forDate && staffList.length) {
+            setChecked(false);
+        }
+    }, [forDate]);
+
     const checkAndPrompt = async () => {
         setChecked(true);
         try {
-            const res = await axios.get(`${API_BASE}/attendance?date=${today}`, { headers });
+            const res = await axios.get(`${API_BASE}/attendance?date=${targetDate}`, { headers });
             const existing = Array.isArray(res.data) ? res.data : [];
             const unmarked = staffList.filter(s =>
                 !existing.find(r => r.staffId === s._id || r.staffName === s.name)
             );
             if (!unmarked.length) return;
+            const label = forDate ? `for ${forDate}` : 'for today';
             Alert.alert(
                 '📅 Attendance Reminder',
-                `${unmarked.length} staff member${unmarked.length > 1 ? 's have' : ' has'} not been marked for today.\n\nDo you want to mark attendance now?`,
+                `${unmarked.length} staff member${unmarked.length > 1 ? 's have' : ' has'} not been marked ${label}.\n\nDo you want to mark attendance now?`,
                 [
                     { text: 'Later', style: 'cancel' },
                     { text: 'Mark Now', onPress: () => openQueue(unmarked) },
@@ -59,6 +85,20 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
         setVisible(true);
     };
 
+    const openTimePicker = (target) => {
+        const current = target === 'timeIn' ? form.timeIn : form.timeOut;
+        setPickerDate(current ? strToDate(current) : new Date());
+        setPickerTarget(target);
+        setShowPicker(true);
+    };
+
+    const onPickerChange = (event, selected) => {
+        setShowPicker(Platform.OS === 'ios');
+        if (selected) {
+            setForm(f => ({ ...f, [pickerTarget]: timeStr(selected) }));
+        }
+    };
+
     const saveAndNext = async () => {
         const staff = queue[step];
         if (!staff) return;
@@ -67,7 +107,7 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
             await axios.post(`${API_BASE}/attendance`, {
                 staffId:   staff._id,
                 staffName: staff.name,
-                date:      today,
+                date:      targetDate,
                 status:    form.status,
                 timeIn:    form.status === 'Absent' ? '' : form.timeIn,
                 timeOut:   form.status === 'Absent' ? '' : form.timeOut,
@@ -95,6 +135,7 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
     const isLast = step + 1 === queue.length;
 
     return (
+        <>
         <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
             <View style={S.overlay}>
                 <View style={S.sheet}>
@@ -102,7 +143,7 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
                     <View style={[S.header, { backgroundColor: BRAND }]}>
                         <View>
                             <Text style={S.headerTitle}>📅 Mark Attendance</Text>
-                            <Text style={S.headerSub}>Today · {today}</Text>
+                            <Text style={S.headerSub}>{forDate || 'Today'} · {targetDate}</Text>
                         </View>
                         <View style={[S.badge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                             <Text style={S.badgeText}>{step + 1} / {queue.length}</Text>
@@ -146,21 +187,41 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
                             <View>
                                 <Text style={[S.sectionLabel, { color: BRAND }]}>TIMES</Text>
                                 <View style={S.timeRow}>
+                                    {/* Clock In */}
                                     <View style={{ flex: 1 }}>
                                         <Text style={S.fieldLabel}>Clock In</Text>
-                                        <TextInput style={S.input} placeholder="08:00"
-                                            value={form.timeIn} onChangeText={v => setForm(f => ({ ...f, timeIn: v }))} />
+                                        <TouchableOpacity style={[S.timePicker, { borderColor: form.timeIn ? BRAND : '#e2e8f0' }]}
+                                            onPress={() => openTimePicker('timeIn')}>
+                                            <Text style={[S.timePickerTxt, { color: form.timeIn ? '#0f172a' : '#94a3b8' }]}>
+                                                {form.timeIn || 'Tap to set'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        {/* Quick button */}
+                                        <TouchableOpacity style={[S.quickBtn, { backgroundColor: BRAND + '18', borderColor: BRAND + '44' }]}
+                                            onPress={() => setForm(f => ({ ...f, timeIn: '08:30' }))}>
+                                            <Text style={[S.quickBtnTxt, { color: BRAND }]}>⚡ 8:30 AM</Text>
+                                        </TouchableOpacity>
                                     </View>
+                                    <View style={{ width: 12 }} />
+                                    {/* Clock Out */}
                                     <View style={{ flex: 1 }}>
                                         <Text style={S.fieldLabel}>Clock Out</Text>
-                                        <TextInput style={S.input} placeholder="17:00"
-                                            value={form.timeOut} onChangeText={v => setForm(f => ({ ...f, timeOut: v }))} />
+                                        <TouchableOpacity style={[S.timePicker, { borderColor: form.timeOut ? BRAND : '#e2e8f0' }]}
+                                            onPress={() => openTimePicker('timeOut')}>
+                                            <Text style={[S.timePickerTxt, { color: form.timeOut ? '#0f172a' : '#94a3b8' }]}>
+                                                {form.timeOut || 'Tap to set'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={[S.quickBtn, { backgroundColor: BRAND + '18', borderColor: BRAND + '44' }]}
+                                            onPress={() => setForm(f => ({ ...f, timeOut: '18:30' }))}>
+                                            <Text style={[S.quickBtnTxt, { color: BRAND }]}>⚡ 6:30 PM</Text>
+                                        </TouchableOpacity>
                                     </View>
-                                    <View style={{ flex: 0.7 }}>
-                                        <Text style={S.fieldLabel}>OT Hrs</Text>
-                                        <TextInput style={S.input} placeholder="0" keyboardType="numeric"
-                                            value={form.overtime} onChangeText={v => setForm(f => ({ ...f, overtime: v }))} />
-                                    </View>
+                                </View>
+                                <View style={{ marginTop: 12 }}>
+                                    <Text style={S.fieldLabel}>OT Hours</Text>
+                                    <TextInput style={S.input} placeholder="0" keyboardType="numeric"
+                                        value={form.overtime} onChangeText={v => setForm(f => ({ ...f, overtime: v }))} />
                                 </View>
                             </View>
                         ) : (
@@ -185,12 +246,23 @@ export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', 
                 </View>
             </View>
         </Modal>
+
+        {showPicker && (
+            <DateTimePicker
+                value={pickerDate}
+                mode="time"
+                is24Hour={true}
+                display={Platform.OS === 'ios' ? 'spinner' : 'clock'}
+                onChange={onPickerChange}
+            />
+        )}
+        </>
     );
 }
 
 const S = StyleSheet.create({
     overlay:      { flex:1, backgroundColor:'rgba(0,0,0,0.55)', justifyContent:'flex-end' },
-    sheet:        { backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'88%' },
+    sheet:        { backgroundColor:'#fff', borderTopLeftRadius:24, borderTopRightRadius:24, maxHeight:'90%' },
     header:       { flexDirection:'row', justifyContent:'space-between', alignItems:'center', padding:20, borderTopLeftRadius:24, borderTopRightRadius:24 },
     headerTitle:  { color:'#fff', fontSize:17, fontWeight:'900' },
     headerSub:    { color:'rgba(255,255,255,0.75)', fontSize:12, marginTop:2 },
@@ -208,8 +280,12 @@ const S = StyleSheet.create({
     chipRow:      { flexDirection:'row', flexWrap:'wrap', gap:8 },
     chip:         { paddingHorizontal:16, paddingVertical:9, borderRadius:10, borderWidth:1.5 },
     chipTxt:      { fontSize:13, fontWeight:'700' },
-    timeRow:      { flexDirection:'row', gap:8, marginTop:4 },
-    fieldLabel:   { fontSize:11, color:'#94a3b8', fontWeight:'600', marginBottom:4 },
+    timeRow:      { flexDirection:'row', marginTop:4 },
+    fieldLabel:   { fontSize:11, color:'#94a3b8', fontWeight:'600', marginBottom:6 },
+    timePicker:   { borderWidth:1.5, borderRadius:10, padding:14, alignItems:'center', backgroundColor:'#f8fafc' },
+    timePickerTxt:{ fontSize:16, fontWeight:'800' },
+    quickBtn:     { marginTop:8, borderWidth:1, borderRadius:8, padding:9, alignItems:'center' },
+    quickBtnTxt:  { fontSize:12, fontWeight:'800' },
     input:        { borderWidth:1.5, borderColor:'#e2e8f0', borderRadius:10, padding:11, fontSize:14, backgroundColor:'#f8fafc', color:'#0f172a' },
     btnRow:       { flexDirection:'row', gap:12, padding:20, paddingTop:12 },
     skipBtn:      { flex:1, padding:15, borderRadius:12, borderWidth:1.5, borderColor:'#e2e8f0', alignItems:'center', justifyContent:'center' },

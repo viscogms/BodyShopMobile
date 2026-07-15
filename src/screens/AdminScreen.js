@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Modal, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Modal, Alert, ActivityIndicator, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
 import { API_BASE } from '../utils/config';
 
@@ -25,15 +26,22 @@ function todayStr() {
 function thisMonth() { return todayStr().slice(0,7); }
 
 function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
-    const [view,    setView]    = useState('daily');
-    const [date,    setDate]    = useState(todayStr());
-    const [month,   setMonth]   = useState(thisMonth());
-    const [rows,    setRows]    = useState([]);
-    const [records, setRecords] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [saving,  setSaving]  = useState(false);
-    const [dateInput, setDateInput] = useState(todayStr());
+    const BRAND = B;
+    const [view,       setView]       = useState('daily');
+    const [date,       setDate]       = useState(todayStr());
+    const [month,      setMonth]      = useState(thisMonth());
+    const [rows,       setRows]       = useState([]);
+    const [records,    setRecords]    = useState([]);
+    const [loading,    setLoading]    = useState(false);
+    const [saving,     setSaving]     = useState(false);
+    const [dateInput,  setDateInput]  = useState(todayStr());
     const [monthInput, setMonthInput] = useState(thisMonth());
+    const [expanded,   setExpanded]   = useState(null);
+
+    const [showTp,   setShowTp]   = useState(false);
+    const [tpTarget, setTpTarget] = useState('timeIn');
+    const [tpIdx,    setTpIdx]    = useState(0);
+    const [tpDate,   setTpDate]   = useState(new Date());
 
     const headers = { 'x-api-key': API_KEY };
 
@@ -74,6 +82,21 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
     }, [view, date, month, staffList]);
 
     const updateRow = (idx, field, val) => setRows(prev => prev.map((r,i) => i===idx ? {...r,[field]:val} : r));
+
+    const openTimePicker = (idx, target) => {
+        const row = rows[idx];
+        const cur = row[target];
+        const d = new Date();
+        if (cur) { const [h,m] = cur.split(':').map(Number); d.setHours(h,m,0,0); }
+        setTpIdx(idx); setTpTarget(target); setTpDate(d); setShowTp(true);
+    };
+    const onTpChange = (e, sel) => {
+        setShowTp(Platform.OS === 'ios');
+        if (sel) {
+            const z = n => String(n).padStart(2,'0');
+            updateRow(tpIdx, tpTarget, `${z(sel.getHours())}:${z(sel.getMinutes())}`);
+        }
+    };
 
     const saveAll = async () => {
         setSaving(true);
@@ -140,51 +163,82 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
             {view==='daily' && !loading && (
                 <View>
                     {rows.length===0 && <Text style={{textAlign:'center',color:'#94a3b8',marginVertical:20}}>No staff found.</Text>}
-                    {rows.map((row, idx) => (
-                        <View key={row.staffId} style={{ backgroundColor:'#fff', borderRadius:10, padding:12, marginBottom:10, borderLeftWidth:4, borderLeftColor: row.saved ? '#22c55e' : '#e2e8f0', elevation:1 }}>
-                            <Text style={{ fontWeight:'bold', fontSize:14, color:'#1e293b' }}>{row.staffName}</Text>
-                            <Text style={{ fontSize:11, color:'#94a3b8', marginBottom:8 }}>{row.category}</Text>
-                            <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginBottom:8 }}>
-                                {STATUSES_ATT.map(s => (
-                                    <TouchableOpacity key={s} onPress={() => updateRow(idx,'status',s)}
-                                        style={{ paddingHorizontal:10, paddingVertical:4, borderRadius:6,
-                                            backgroundColor: row.status===s ? STATUS_BG[s] : '#f1f5f9' }}>
-                                        <Text style={{ fontSize:11, fontWeight:'bold', color: row.status===s ? STATUS_FG[s] : '#64748b' }}>{s}</Text>
+                    {rows.map((row, idx) => {
+                        const isOpen = expanded === row.staffId;
+                        return (
+                        <View key={row.staffId} style={{ backgroundColor:'#fff', borderRadius:10, marginBottom:8, borderLeftWidth:4, borderLeftColor: row.saved ? '#22c55e' : '#e2e8f0', elevation:1, overflow:'hidden' }}>
+                            <TouchableOpacity onPress={() => setExpanded(isOpen ? null : row.staffId)}
+                                style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', padding:12 }}>
+                                <Text style={{ fontWeight:'800', fontSize:14, color:'#1e293b', flex:1 }}>{row.staffName}</Text>
+                                <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
+                                    <View style={{ paddingHorizontal:8, paddingVertical:3, borderRadius:6, backgroundColor: STATUS_BG[row.status] }}>
+                                        <Text style={{ fontSize:10, fontWeight:'800', color: STATUS_FG[row.status] }}>{row.status}</Text>
+                                    </View>
+                                    {row.timeIn  && <Text style={{ fontSize:10, color:'#94a3b8' }}>▶{row.timeIn}</Text>}
+                                    {row.timeOut && <Text style={{ fontSize:10, color:'#94a3b8' }}>■{row.timeOut}</Text>}
+                                    <Text style={{ color:'#94a3b8', fontSize:12 }}>{isOpen ? '▲' : '▼'}</Text>
+                                </View>
+                            </TouchableOpacity>
+                            {isOpen && (
+                                <View style={{ paddingHorizontal:12, paddingBottom:12, borderTopWidth:1, borderTopColor:'#f1f5f9' }}>
+                                    <View style={{ flexDirection:'row', flexWrap:'wrap', gap:6, marginTop:10, marginBottom:10 }}>
+                                        {STATUSES_ATT.map(s => (
+                                            <TouchableOpacity key={s} onPress={() => updateRow(idx,'status',s)}
+                                                style={{ paddingHorizontal:12, paddingVertical:6, borderRadius:8,
+                                                    backgroundColor: row.status===s ? STATUS_BG[s] : '#f1f5f9' }}>
+                                                <Text style={{ fontSize:12, fontWeight:'800', color: row.status===s ? STATUS_FG[s] : '#64748b' }}>{s}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                    {row.status!=='Absent' ? (
+                                        <View>
+                                            <View style={{ flexDirection:'row', gap:10 }}>
+                                                <View style={{ flex:1 }}>
+                                                    <Text style={{ fontSize:10, color:'#94a3b8', fontWeight:'700', marginBottom:4 }}>CLOCK IN</Text>
+                                                    <TouchableOpacity onPress={() => openTimePicker(idx,'timeIn')}
+                                                        style={{ borderWidth:1.5, borderColor: row.timeIn ? BRAND : '#e2e8f0', borderRadius:8, padding:10, alignItems:'center', backgroundColor:'#f8fafc' }}>
+                                                        <Text style={{ fontSize:15, fontWeight:'800', color: row.timeIn ? '#0f172a' : '#94a3b8' }}>{row.timeIn || 'Tap'}</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity onPress={() => updateRow(idx,'timeIn','08:30')}
+                                                        style={{ marginTop:6, borderRadius:7, padding:7, alignItems:'center', backgroundColor: BRAND+'18', borderWidth:1, borderColor: BRAND+'44' }}>
+                                                        <Text style={{ fontSize:11, fontWeight:'800', color: BRAND }}>⚡ 8:30 AM</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <View style={{ flex:1 }}>
+                                                    <Text style={{ fontSize:10, color:'#94a3b8', fontWeight:'700', marginBottom:4 }}>CLOCK OUT</Text>
+                                                    <TouchableOpacity onPress={() => openTimePicker(idx,'timeOut')}
+                                                        style={{ borderWidth:1.5, borderColor: row.timeOut ? BRAND : '#e2e8f0', borderRadius:8, padding:10, alignItems:'center', backgroundColor:'#f8fafc' }}>
+                                                        <Text style={{ fontSize:15, fontWeight:'800', color: row.timeOut ? '#0f172a' : '#94a3b8' }}>{row.timeOut || 'Tap'}</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity onPress={() => updateRow(idx,'timeOut','18:30')}
+                                                        style={{ marginTop:6, borderRadius:7, padding:7, alignItems:'center', backgroundColor: BRAND+'18', borderWidth:1, borderColor: BRAND+'44' }}>
+                                                        <Text style={{ fontSize:11, fontWeight:'800', color: BRAND }}>⚡ 6:30 PM</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                            <View style={{ marginTop:10 }}>
+                                                <Text style={{ fontSize:10, color:'#94a3b8', fontWeight:'700', marginBottom:4 }}>OT HOURS</Text>
+                                                <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:8, padding:9, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
+                                                    value={row.overtime} placeholder="0" keyboardType="numeric" onChangeText={v => updateRow(idx,'overtime',v)} />
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:8, padding:9, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
+                                            value={row.notes} placeholder="Reason for absence (optional)" onChangeText={v => updateRow(idx,'notes',v)} />
+                                    )}
+                                    <TouchableOpacity onPress={saveAll} disabled={saving}
+                                        style={{ marginTop:12, backgroundColor:BRAND, padding:11, borderRadius:9, alignItems:'center', opacity:saving?0.6:1 }}>
+                                        <Text style={{ color:'#fff', fontWeight:'800', fontSize:13 }}>{saving ? 'Saving...' : '💾 Save'}</Text>
                                     </TouchableOpacity>
-                                ))}
-                            </View>
-                            {row.status!=='Absent' && (
-                                <View style={{ flexDirection:'row', gap:8, flexWrap:'wrap' }}>
-                                    <View style={{ flex:1, minWidth:100 }}>
-                                        <Text style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>TIME IN (HH:MM)</Text>
-                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
-                                            value={row.timeIn} placeholder="08:00" onChangeText={v => updateRow(idx,'timeIn',v)} />
-                                    </View>
-                                    <View style={{ flex:1, minWidth:100 }}>
-                                        <Text style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>TIME OUT (HH:MM)</Text>
-                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
-                                            value={row.timeOut} placeholder="17:00" onChangeText={v => updateRow(idx,'timeOut',v)} />
-                                    </View>
-                                    <View style={{ width:80 }}>
-                                        <Text style={{ fontSize:10, color:'#94a3b8', marginBottom:2 }}>OT HRS</Text>
-                                        <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b' }}
-                                            value={row.overtime} placeholder="0" keyboardType="numeric" onChangeText={v => updateRow(idx,'overtime',v)} />
-                                    </View>
                                 </View>
                             )}
-                            {row.status==='Absent' && (
-                                <TextInput style={{ borderWidth:1, borderColor:'#e2e8f0', borderRadius:6, padding:7, fontSize:13, backgroundColor:'#f8fafc', color:'#1e293b', marginTop:4 }}
-                                    value={row.notes} placeholder="Reason (optional)" onChangeText={v => updateRow(idx,'notes',v)} />
-                            )}
                         </View>
-                    ))}
-                    {rows.length>0 && (
-                        <TouchableOpacity onPress={saveAll} disabled={saving}
-                            style={{ backgroundColor:B, padding:14, borderRadius:10, alignItems:'center', marginTop:4, opacity:saving?0.6:1 }}>
-                            <Text style={{ color:'#fff', fontWeight:'bold', fontSize:15 }}>{saving ? 'Saving...' : '💾 Save All Attendance'}</Text>
-                        </TouchableOpacity>
-                    )}
+                        );
+                    })}
                 </View>
+            )}
+            {showTp && (
+                <DateTimePicker value={tpDate} mode="time" is24Hour display={Platform.OS==='ios'?'spinner':'clock'} onChange={onTpChange} />
             )}
 
             {view==='monthly' && !loading && (
@@ -249,6 +303,7 @@ export default function AdminScreen({
     const [editingStaffId,  setEditingStaffId]  = useState(null);
     const [form,            setForm]            = useState(BLANK());
     const [saving,          setSaving]          = useState(false);
+    const [expandedStaff,   setExpandedStaff]   = useState(null);
 
     useEffect(() => {
         if (adminPartTab === 'staff') fetchAll();
@@ -429,36 +484,51 @@ export default function AdminScreen({
 
                     {!loading && filtered.map(({ staff: s, user: u }) => {
                         const name = s?.name || u?.name;
+                        const isOpen = expandedStaff === name;
                         return (
-                            <TouchableOpacity key={name} style={[S.card, {borderLeftColor:BRAND}]} onPress={() => openEdit({ staff: s, user: u })}>
-                                <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start'}}>
-                                    <View style={{flex:1}}>
-                                        <Text style={{fontWeight:'900', fontSize:15, color:'#14532d'}}>{name}</Text>
-                                        <View style={{flexDirection:'row', flexWrap:'wrap', gap:4, marginTop:4}}>
+                            <View key={name} style={[S.card, { padding:0, overflow:'hidden', borderLeftColor:BRAND }]}>
+                                <TouchableOpacity onPress={() => setExpandedStaff(isOpen ? null : name)}
+                                    style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', padding:12 }}>
+                                    <View style={{ flexDirection:'row', alignItems:'center', gap:10, flex:1 }}>
+                                        <View style={{ width:38, height:38, borderRadius:19, backgroundColor:'#dcfce7', alignItems:'center', justifyContent:'center' }}>
+                                            <Text style={{ fontSize:16, fontWeight:'900', color: BRAND }}>{name?.charAt(0).toUpperCase()}</Text>
+                                        </View>
+                                        <Text style={{ fontWeight:'800', fontSize:15, color:'#14532d' }}>{name}</Text>
+                                    </View>
+                                    <Text style={{ color:'#94a3b8', fontSize:12 }}>{isOpen ? '▲' : '▼'}</Text>
+                                </TouchableOpacity>
+                                {isOpen && (
+                                    <View style={{ paddingHorizontal:12, paddingBottom:12, borderTopWidth:1, borderTopColor:'#f1f5f9' }}>
+                                        <View style={{ flexDirection:'row', flexWrap:'wrap', gap:4, marginTop:10, marginBottom:8 }}>
                                             {s && <View style={[S.badge, {backgroundColor:'#dcfce7'}]}><Text style={{color:BRAND, fontSize:10, fontWeight:'800'}}>{s.category}</Text></View>}
-                                            {u && (
-                                                <View style={[S.badge, {backgroundColor: u.isActive ? '#dcfce7' : '#fee2e2'}]}>
-                                                    <Text style={{color: u.isActive ? '#15803d' : '#dc2626', fontSize:10, fontWeight:'800'}}>{u.role} {u.isActive ? '✓' : '✗'}</Text>
-                                                </View>
-                                            )}
+                                            {u && <View style={[S.badge, {backgroundColor: u.isActive ? '#dcfce7' : '#fee2e2'}]}>
+                                                <Text style={{color: u.isActive ? '#15803d' : '#dc2626', fontSize:10, fontWeight:'800'}}>{u.role} {u.isActive ? '✓' : '✗'}</Text>
+                                            </View>}
+                                        </View>
+                                        <View style={{ flexDirection:'row', flexWrap:'wrap', gap:4, marginBottom:12 }}>
+                                            {u            && <Text style={S.chip2}>🔑 {u.username}</Text>}
+                                            {s?.country    && <Text style={S.chip2}>🌍 {s.country}</Text>}
+                                            {s?.salary>0   && <Text style={S.chip2}>💰 AED {s.salary}</Text>}
+                                            {s?.eid        && <Text style={S.chip2}>🪪 {s.eid}</Text>}
+                                            {s?.eidExpiry  && <Text style={S.chip2}>📅 {s.eidExpiry}</Text>}
+                                            {s?.passportNo && <Text style={S.chip2}>📘 {s.passportNo}</Text>}
+                                            {s?.birthday   && <Text style={S.chip2}>🎂 {s.birthday}</Text>}
+                                            {(s?.mobiles||[]).filter(Boolean).map((m,i) => <Text key={i} style={S.chip2}>📞 {m}</Text>)}
+                                            {s?.email      && <Text style={[S.chip2, {flexShrink:1}]}>✉️ {s.email}</Text>}
+                                        </View>
+                                        <View style={{ flexDirection:'row', gap:8 }}>
+                                            <TouchableOpacity onPress={() => openEdit({ staff: s, user: u })}
+                                                style={{ flex:1, backgroundColor: BRAND, borderRadius:8, padding:10, alignItems:'center' }}>
+                                                <Text style={{ color:'#fff', fontWeight:'800', fontSize:12 }}>✏️ Edit</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => deletePerson({ staff: s, user: u })}
+                                                style={{ flex:1, borderWidth:1, borderColor:'#fca5a5', borderRadius:8, padding:10, alignItems:'center' }}>
+                                                <Text style={{ color:'#ef4444', fontWeight:'800', fontSize:12 }}>🗑️ Delete</Text>
+                                            </TouchableOpacity>
                                         </View>
                                     </View>
-                                    <TouchableOpacity onPress={() => deletePerson({ staff: s, user: u })} style={{padding:6}}>
-                                        <Text style={{color:'#ef4444', fontWeight:'800', fontSize:13}}>🗑️</Text>
-                                    </TouchableOpacity>
-                                </View>
-                                <View style={{flexDirection:'row', flexWrap:'wrap', gap:4, marginTop:8}}>
-                                    {u            && <Text style={S.chip2}>🔑 {u.username}</Text>}
-                                    {s?.country    && <Text style={S.chip2}>🌍 {s.country}</Text>}
-                                    {s?.salary>0   && <Text style={S.chip2}>💰 AED {s.salary}</Text>}
-                                    {s?.eid        && <Text style={S.chip2}>🪪 {s.eid}</Text>}
-                                    {s?.eidExpiry  && <Text style={S.chip2}>📅 {s.eidExpiry}</Text>}
-                                    {s?.passportNo && <Text style={S.chip2}>📘 {s.passportNo}</Text>}
-                                    {s?.birthday   && <Text style={S.chip2}>🎂 {s.birthday}</Text>}
-                                    {(s?.mobiles||[]).filter(Boolean).map((m,i) => <Text key={i} style={S.chip2}>📞 {m}</Text>)}
-                                    {s?.email      && <Text style={[S.chip2, {flexShrink:1}]}>✉️ {s.email}</Text>}
-                                </View>
-                            </TouchableOpacity>
+                                )}
+                            </View>
                         );
                     })}
                     {!loading && filtered.length === 0 && (
