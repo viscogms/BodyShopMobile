@@ -34,6 +34,7 @@ import JobCardDetailModal from './src/components/JobCardDetailModal';
 import LoginScreen from './src/screens/LoginScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import AdminScreen from './src/screens/AdminScreen';
+import AttendanceReminderModal from './src/components/AttendanceReminderModal';
 import FinanceScreen from './src/screens/FinanceScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import TodoScreen from './src/screens/TodoScreen';
@@ -861,6 +862,8 @@ export default function App() {
         )}
 
         {/* ── MODALS ──────────────────────────────────────── */}
+        <AttendanceReminderModal staffList={staffList} BRAND="#16a34a" apiKey={API_KEY} />
+
         <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} isDark={isDark} usersList={staffList} />
 
         <JobCardFormModal showForm={showForm} setShowForm={setShowForm} isEditing={isEditing} handleSave={handleSave} loading={loading} formTab={formTab} setFormTab={setFormTab} formData={formData} setFormData={setFormData} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} showJobCardDatePicker={showJobCardDatePicker} setShowJobCardDatePicker={setShowJobCardDatePicker} showDeliveryDatePicker={showDeliveryDatePicker} setShowDeliveryDatePicker={setShowDeliveryDatePicker} tempDateObj={tempDateObj} setTempDateObj={setTempDateObj} showReminderDatePicker={showReminderDatePicker} setShowReminderDatePicker={setShowReminderDatePicker} showReminderTimePicker={showReminderTimePicker} setShowReminderTimePicker={setShowReminderTimePicker} renderImageSection={renderNewImageSection} openContactList={openContactList} quickVoice={quickVoice} setQuickVoice={setQuickVoice} updateDynamicList={updateDynamicList} activeNavGroup={activeNavGroup} setActiveNavGroup={setActiveNavGroup} activeNavSubGroup={activeNavSubGroup} setActiveNavSubGroup={setActiveNavSubGroup} dbPartsCatalog={dbPartsCatalog} partSelections={partSelections} toggleCatalogPart={toggleCatalogPart} customParts={customParts} updateDynamicCustomPart={updateDynamicCustomPart} removeCustomPart={removeCustomPart} usersList={usersList} isDark={isDark} />
