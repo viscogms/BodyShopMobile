@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Modal, Alert, ActivityIndicator, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
-import { API_BASE } from '../utils/config';
+import { API_BASE, API_KEY } from '../utils/config';
+import SalaryAdvanceModal from '../components/SalaryAdvanceModal';
 
 const STAFF_CATEGORIES = ['Foreman','Technician','Helper','Supervisor','Accounts Clerk','Driver','Denter','Painter'];
 const ROLES = ['Admin','Owner','Technician','User'];
@@ -304,6 +305,7 @@ export default function AdminScreen({
     const [form,            setForm]            = useState(BLANK());
     const [saving,          setSaving]          = useState(false);
     const [expandedStaff,   setExpandedStaff]   = useState(null);
+    const [advanceStaff,    setAdvanceStaff]    = useState(null);
 
     useEffect(() => {
         if (adminPartTab === 'staff') fetchAll();
@@ -521,6 +523,12 @@ export default function AdminScreen({
                                                 style={{ flex:1, backgroundColor: BRAND, borderRadius:8, padding:10, alignItems:'center' }}>
                                                 <Text style={{ color:'#fff', fontWeight:'800', fontSize:12 }}>✏️ Edit</Text>
                                             </TouchableOpacity>
+                                            {s && (
+                                                <TouchableOpacity onPress={() => setAdvanceStaff(s)}
+                                                    style={{ flex:1, backgroundColor:'#ffedd5', borderRadius:8, padding:10, alignItems:'center' }}>
+                                                    <Text style={{ color:'#c2410c', fontWeight:'800', fontSize:12 }}>💰 Advance</Text>
+                                                </TouchableOpacity>
+                                            )}
                                             <TouchableOpacity onPress={() => deletePerson({ staff: s, user: u })}
                                                 style={{ flex:1, borderWidth:1, borderColor:'#fca5a5', borderRadius:8, padding:10, alignItems:'center' }}>
                                                 <Text style={{ color:'#ef4444', fontWeight:'800', fontSize:12 }}>🗑️ Delete</Text>
@@ -533,6 +541,15 @@ export default function AdminScreen({
                     })}
                     {!loading && filtered.length === 0 && (
                         <Text style={{textAlign:'center', color:'#aaa', marginTop:30}}>No staff found.</Text>
+                    )}
+
+                    {advanceStaff && (
+                        <SalaryAdvanceModal
+                            staff={advanceStaff}
+                            apiKey={API_KEY}
+                            BRAND="#16a34a"
+                            onClose={() => setAdvanceStaff(null)}
+                        />
                     )}
 
                     <Modal visible={showModal} animationType="slide" onRequestClose={() => setShowModal(false)}>
