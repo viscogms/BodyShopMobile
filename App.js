@@ -42,6 +42,7 @@ import TodoScreen from './src/screens/TodoScreen';
 const API_BASE = _API_BASE;
 const API_URL  = `${API_BASE}/jobcards`;
 axios.defaults.headers.common['x-api-key'] = API_KEY;
+axios.defaults.headers.common['x-branch'] = 'bodyshop';
 
 // Send JWT Bearer token on every request; fall back to API key if no token yet
 axios.interceptors.request.use(async (config) => {
