@@ -39,7 +39,12 @@
       ]
     ],
     "updates": {
-      "checkAutomatically": "NEVER"
+      "url": "https://u.expo.dev/f064bf74-a83a-48bc-94a0-053206800be5",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "extra": {
       "eas": {
