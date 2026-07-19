@@ -2,32 +2,39 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Switch, StyleSheet, Modal, Alert, ActivityIndicator, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { API_BASE, API_KEY } from '../utils/config';
 import SalaryAdvanceModal from '../components/SalaryAdvanceModal';
 
-const STAFF_CATEGORIES = ['Foreman','Technician','Helper','Supervisor','Accounts Clerk','Driver','Denter','Painter'];
+const STAFF_CATEGORIES = ['Foreman','Technician','Helper','Supervisor','Accounts Clerk','Driver','Denter','Painter','Electrician'];
 const ROLES = ['Admin','Owner','Technician','User'];
 
 const BLANK = () => ({
     name:'', category:'Technician', birthday:'', country:'', passportNo:'',
     eid:'', eidExpiry:'', salary:'', mobiles:[''], email:'',
-    username:'', password:'', role:'User', isActive:true,
+    username:'', password:'', role:'User', isActive:true, attendanceRequired:true,
 });
 
 const BRAND = '#16a34a';
 
-const STATUSES_ATT = ['Present','Absent','Late','Half Day'];
-const STATUS_BG = { Present:'#dcfce7', Absent:'#fee2e2', Late:'#fef9c3', 'Half Day':'#dbeafe' };
-const STATUS_FG = { Present:'#15803d', Absent:'#dc2626', Late:'#854d0e', 'Half Day':'#1d4ed8' };
+const STATUSES_ATT = ['Present','Absent','Late','Half Day','Holiday'];
+const STATUS_BG = { Present:'#dcfce7', Absent:'#fee2e2', Late:'#fef9c3', 'Half Day':'#dbeafe', Holiday:'#ede9fe' };
+const STATUS_FG = { Present:'#15803d', Absent:'#dc2626', Late:'#854d0e', 'Half Day':'#1d4ed8', Holiday:'#6d28d9' };
 
 function todayStr() {
     const d = new Date(); const z = n => String(n).padStart(2,'0');
     return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
 }
 function thisMonth() { return todayStr().slice(0,7); }
+function isSunday(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).getDay() === 0;
+}
 
-function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
+function AttendanceSection({ staffList: allStaff, BRAND: B, API_KEY }) {
     const BRAND = B;
+    const staffList = useMemo(() => allStaff.filter(s => s.attendanceRequired !== false), [allStaff]);
     const [view,       setView]       = useState('daily');
     const [date,       setDate]       = useState(todayStr());
     const [month,      setMonth]      = useState(thisMonth());
@@ -35,6 +42,7 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
     const [records,    setRecords]    = useState([]);
     const [loading,    setLoading]    = useState(false);
     const [saving,     setSaving]     = useState(false);
+    const [generating, setGenerating] = useState(false);
     const [dateInput,  setDateInput]  = useState(todayStr());
     const [monthInput, setMonthInput] = useState(thisMonth());
     const [expanded,   setExpanded]   = useState(null);
@@ -115,12 +123,29 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
         finally { setSaving(false); }
     };
 
+    const markAllHoliday = () => {
+        Alert.alert('Mark all as Holiday?', `Every staff member will be marked Holiday for ${date}. You can still re-mark anyone who worked afterward.`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Mark All', onPress: async () => {
+                setSaving(true);
+                try {
+                    await Promise.all(staffList.map(s => axios.post(`${API_BASE}/attendance`, {
+                        staffId: s._id, staffName: s.name, date, status: 'Holiday', timeIn: '', timeOut: '', overtime: 0, notes: '',
+                    }, { headers })));
+                    fetchDaily(date);
+                    Alert.alert('Saved', 'All staff marked Holiday.');
+                } catch (e) { Alert.alert('Error', 'Failed to mark holiday.'); }
+                finally { setSaving(false); }
+            }},
+        ]);
+    };
+
     const monthlyData = useMemo(() => {
         const [y,m] = month.split('-').map(Number);
         const days = new Date(y,m,0).getDate();
         return staffList.map(s => {
             const sRecs = records.filter(r => r.staffId===s._id || r.staffName===s.name);
-            const summary = { Present:0, Absent:0, Late:0, 'Half Day':0, overtime:0 };
+            const summary = { Present:0, Absent:0, Late:0, 'Half Day':0, Holiday:0, overtime:0 };
             const dayMap = {};
             sRecs.forEach(r => {
                 const day = parseInt(r.date.split('-')[2]);
@@ -131,6 +156,72 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
             return { ...s, dayMap, summary, days };
         });
     }, [records, staffList, month]);
+
+    const generateMonthlyPDF = async () => {
+        try {
+            setGenerating(true);
+            const now = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+            const totals = monthlyData.reduce((acc, s) => {
+                acc.Present += s.summary.Present||0; acc.Absent += s.summary.Absent||0;
+                acc.Late += s.summary.Late||0; acc['Half Day'] += s.summary['Half Day']||0;
+                acc.Holiday += s.summary.Holiday||0; acc.overtime += s.summary.overtime||0;
+                return acc;
+            }, { Present:0, Absent:0, Late:0, 'Half Day':0, Holiday:0, overtime:0 });
+
+            const rows = monthlyData.map(s => `<tr>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;font-weight:700">${s.name}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;color:#666">${s.category}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;text-align:center;color:#15803d;font-weight:700">${s.summary.Present||0}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;text-align:center;color:#dc2626;font-weight:700">${s.summary.Absent||0}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;text-align:center;color:#854d0e;font-weight:700">${s.summary.Late||0}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;text-align:center;color:#1d4ed8;font-weight:700">${s.summary['Half Day']||0}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;text-align:center;color:#6d28d9;font-weight:700">${s.summary.Holiday||0}</td>
+                <td style="padding:7px 8px;border-bottom:1px solid #dcfce7;font-size:11px;text-align:center;font-weight:700">${s.summary.overtime||0}h</td>
+            </tr>`).join('');
+
+            const html = `<html><body style="font-family:Arial,sans-serif;padding:24px;color:#1a202c">
+                <div style="text-align:center;border-bottom:3px solid #16a34a;padding-bottom:14px;margin-bottom:18px">
+                    <h2 style="margin:0;color:#14532d;font-size:20px">VISCO BODY SHOP</h2>
+                    <p style="color:#16a34a;margin:4px 0;font-weight:700;font-size:13px">MONTHLY ATTENDANCE REPORT — ${month}</p>
+                    <p style="color:#999;font-size:11px;margin:2px 0">Generated: ${now}</p>
+                </div>
+                <div style="display:flex;gap:10px;margin-bottom:18px">
+                    <div style="flex:1;border-left:3px solid #16a34a;background:#f0fdf4;padding:10px 12px">
+                        <div style="font-size:9px;color:#16a34a;font-weight:800;text-transform:uppercase">Present</div>
+                        <div style="font-size:16px;font-weight:900;color:#16a34a;margin-top:2px">${totals.Present}</div>
+                    </div>
+                    <div style="flex:1;border-left:3px solid #ef4444;background:#fef2f2;padding:10px 12px">
+                        <div style="font-size:9px;color:#ef4444;font-weight:800;text-transform:uppercase">Absent</div>
+                        <div style="font-size:16px;font-weight:900;color:#ef4444;margin-top:2px">${totals.Absent}</div>
+                    </div>
+                    <div style="flex:1;border-left:3px solid #f59e0b;background:#fff7ed;padding:10px 12px">
+                        <div style="font-size:9px;color:#f59e0b;font-weight:800;text-transform:uppercase">Late</div>
+                        <div style="font-size:16px;font-weight:900;color:#f59e0b;margin-top:2px">${totals.Late}</div>
+                    </div>
+                    <div style="flex:1;border-left:3px solid #7c3aed;background:#f5f3ff;padding:10px 12px">
+                        <div style="font-size:9px;color:#7c3aed;font-weight:800;text-transform:uppercase">Holiday</div>
+                        <div style="font-size:16px;font-weight:900;color:#7c3aed;margin-top:2px">${totals.Holiday}</div>
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse">
+                    <tr style="background:#16a34a;color:#fff">
+                        <th style="padding:9px 8px;text-align:left;font-size:10px">Staff</th>
+                        <th style="padding:9px 8px;text-align:left;font-size:10px">Category</th>
+                        <th style="padding:9px 8px;text-align:center;font-size:10px">Present</th>
+                        <th style="padding:9px 8px;text-align:center;font-size:10px">Absent</th>
+                        <th style="padding:9px 8px;text-align:center;font-size:10px">Late</th>
+                        <th style="padding:9px 8px;text-align:center;font-size:10px">Half Day</th>
+                        <th style="padding:9px 8px;text-align:center;font-size:10px">Holiday</th>
+                        <th style="padding:9px 8px;text-align:center;font-size:10px">OT</th>
+                    </tr>${rows}
+                </table>
+            </body></html>`;
+
+            const { uri } = await Print.printToFileAsync({ html });
+            await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+        } catch (e) { Alert.alert('Error', 'Failed to generate PDF.'); }
+        finally { setGenerating(false); }
+    };
 
     return (
         <View>
@@ -158,6 +249,13 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
                     <Text style={{ color:'#fff', fontWeight:'bold', fontSize:12 }}>Go</Text>
                 </TouchableOpacity>
             </View>
+
+            {view==='daily' && isSunday(date) && (
+                <TouchableOpacity onPress={markAllHoliday} disabled={saving}
+                    style={{ backgroundColor:'#ede9fe', borderWidth:1, borderColor:'#c4b5fd', borderRadius:9, padding:11, alignItems:'center', marginBottom:12, opacity:saving?0.6:1 }}>
+                    <Text style={{ color:'#6d28d9', fontWeight:'800', fontSize:13 }}>🎉 Mark All as Holiday (Sunday)</Text>
+                </TouchableOpacity>
+            )}
 
             {loading && <ActivityIndicator color={B} style={{ marginVertical:20 }} />}
 
@@ -244,8 +342,13 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
 
             {view==='monthly' && !loading && (
                 <View>
+                    <TouchableOpacity onPress={generateMonthlyPDF} disabled={generating}
+                        style={{ backgroundColor:B, borderRadius:9, padding:11, alignItems:'center', marginBottom:12, opacity:generating?0.6:1 }}>
+                        {generating ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color:'#fff', fontWeight:'800', fontSize:13 }}>🖨️ Print Monthly Report</Text>}
+                    </TouchableOpacity>
+
                     <View style={{ flexDirection:'row', gap:8, marginBottom:12, flexWrap:'wrap' }}>
-                        {['Present','Absent','Late','Half Day'].map(s => (
+                        {['Present','Absent','Late','Half Day','Holiday'].map(s => (
                             <View key={s} style={{ flex:1, minWidth:70, backgroundColor:STATUS_BG[s], borderRadius:10, padding:10, alignItems:'center' }}>
                                 <Text style={{ fontSize:20, fontWeight:'900', color:STATUS_FG[s] }}>{records.filter(r=>r.status===s).length}</Text>
                                 <Text style={{ fontSize:10, fontWeight:'bold', color:STATUS_FG[s] }}>{s}</Text>
@@ -263,6 +366,7 @@ function AttendanceSection({ staffList, BRAND: B, API_KEY }) {
                                     <Text style={{ fontSize:11, fontWeight:'bold', color:'#15803d' }}>P:{s.summary.Present||0}</Text>
                                     <Text style={{ fontSize:11, fontWeight:'bold', color:'#dc2626' }}>A:{s.summary.Absent||0}</Text>
                                     <Text style={{ fontSize:11, fontWeight:'bold', color:'#854d0e' }}>L:{s.summary.Late||0}</Text>
+                                    {s.summary.Holiday>0 && <Text style={{ fontSize:11, fontWeight:'bold', color:'#6d28d9' }}>H:{s.summary.Holiday}</Text>}
                                     {s.summary.overtime>0 && <Text style={{ fontSize:11, fontWeight:'bold', color:B }}>OT:{s.summary.overtime}h</Text>}
                                 </View>
                             </View>
@@ -489,6 +593,7 @@ export default function AdminScreen({
             password:   '',
             role:       u?.role       || 'User',
             isActive:   u?.isActive   !== false,
+            attendanceRequired: s?.attendanceRequired !== false,
         });
         setShowModal(true);
     };
@@ -512,6 +617,7 @@ export default function AdminScreen({
                 country: form.country, passportNo: form.passportNo, eid: form.eid,
                 eidExpiry: form.eidExpiry, salary: Number(form.salary)||0,
                 email: form.email, mobiles: form.mobiles.filter(m => m.trim()),
+                attendanceRequired: form.attendanceRequired,
             };
             if (editingStaffId) {
                 const r = await axios.put(`${API_BASE}/staff/${editingStaffId}`, hrPayload);
@@ -698,6 +804,11 @@ export default function AdminScreen({
                                         </TouchableOpacity>
                                     ))}
                                 </ScrollView>
+
+                                <View style={{flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:14}}>
+                                    <Text style={[S.fieldLabel, {color:'#15803d'}]}>Mark Attendance</Text>
+                                    <Switch value={form.attendanceRequired} onValueChange={v => setForm(f=>({...f,attendanceRequired:v}))} trackColor={{true:BRAND}} />
+                                </View>
 
                                 <View style={{flexDirection:'row', gap:10}}>
                                     <View style={{flex:1}}>

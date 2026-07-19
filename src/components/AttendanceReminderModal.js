@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Modal, Alert, ScrollView, StyleSheet, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import axios from 'axios';
@@ -25,7 +25,8 @@ function strToDate(hhmm) {
 }
 
 // forDate: optional date string (YYYY-MM-DD) to mark attendance for a different day (e.g. Sunday)
-export default function AttendanceReminderModal({ staffList, BRAND = '#7c3aed', apiKey, forDate }) {
+export default function AttendanceReminderModal({ staffList: allStaff, BRAND = '#7c3aed', apiKey, forDate }) {
+    const staffList = useMemo(() => allStaff.filter(s => s.attendanceRequired !== false), [allStaff]);
     const [visible,   setVisible]   = useState(false);
     const [queue,     setQueue]     = useState([]);
     const [step,      setStep]      = useState(0);
