@@ -5,7 +5,7 @@ import axios from 'axios';
 import { getCleanModelText } from '../utils/helpers';
 import { getStyles, COLORS } from '../utils/AppStyles';
 
-const API_URL = 'https://bodyshop-backend.onrender.com/api/jobcards';
+const API_URL = 'https://visco-api.onrender.com/api/jobcards';
 
 export default function TodoScreen({ todoCards, onBack, isDark = false, onCardPress }) {
   const S = getStyles(isDark);
