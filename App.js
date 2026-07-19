@@ -33,7 +33,10 @@ import JobCardFormModal from './src/components/JobCardFormModal';
 import JobCardDetailModal from './src/components/JobCardDetailModal';
 import LoginScreen from './src/screens/LoginScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import AdminScreen from './src/screens/AdminScreen';
+import StaffScreen from './src/screens/StaffScreen';
+import AttendanceScreen from './src/screens/AttendanceScreen';
+import LaborScreen from './src/screens/LaborScreen';
+import PartsScreen from './src/screens/PartsScreen';
 import AttendanceReminderModal from './src/components/AttendanceReminderModal';
 import FinanceScreen from './src/screens/FinanceScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
@@ -123,7 +126,6 @@ export default function App() {
   const [totalActiveCount, setTotalActiveCount] = useState(0); // ← FIX 2: Add this state
   const [pinnedCardId, setPinnedCardId] = useState(null); // ✅ New/clone card top ekata pin karanawa
   const pinnedCardIdRef = useRef(null); // Async context eke access karanawa
-  const [adminPartTab,   setAdminPartTab]   = useState('staff');
 
   const [newGroupName,          setNewGroupName]          = useState('');
   const [newSubGroupName,       setNewSubGroupName]       = useState('');
@@ -442,7 +444,6 @@ export default function App() {
     setCurrentScreen(screen);
     if (isSidebarOpen) toggleSidebar();
     if (screen === 'todos') { fetchAllTodos(); }
-    if (screen === 'admin') { setLoading(true); axios.get(`${API_BASE}/users`).then(r => setUsersList(r.data)); axios.get(`${API_BASE}/logs`).then(r => setActivityLogs(r.data)); setLoading(false); }
   };
   const toggleSidebar = () => { const toValue = isSidebarOpen ? -SIDEBAR_WIDTH : 0; Animated.timing(sidebarAnim, { toValue, duration: 300, useNativeDriver: true }).start(); setIsSidebarOpen(!isSidebarOpen); };
 
@@ -787,7 +788,10 @@ export default function App() {
               {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'finance' && S.sidebarLinkActive]} onPress={() => navigateTo('finance')}><Text style={[S.sidebarLinkText, currentScreen === 'finance' && { color: C.accent }]}>💵  Finance Report</Text></TouchableOpacity>}
               {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'reports' && S.sidebarLinkActive]} onPress={() => navigateTo('reports')}><Text style={[S.sidebarLinkText, currentScreen === 'reports' && { color: C.accent }]}>📊  Earnings Report</Text></TouchableOpacity>}
               {currentUser?.role !== 'Owner' && todoCount > 0 && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'todos' && S.sidebarLinkActive]} onPress={() => navigateTo('todos')}><Text style={[S.sidebarLinkText, currentScreen === 'todos' && { color: C.accent }]}>📋  To-Do's <Text style={{ color: C.accent, fontWeight: '900' }}>({todoCount})</Text></Text></TouchableOpacity>}
-              {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'admin' && S.sidebarLinkActive]} onPress={() => navigateTo('admin')}><Text style={[S.sidebarLinkText, currentScreen === 'admin' && { color: C.accent }]}>🛡️  Admin Control</Text></TouchableOpacity>}
+              {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'staff' && S.sidebarLinkActive]} onPress={() => navigateTo('staff')}><Text style={[S.sidebarLinkText, currentScreen === 'staff' && { color: C.accent }]}>👥  Staff</Text></TouchableOpacity>}
+              {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'attendance' && S.sidebarLinkActive]} onPress={() => navigateTo('attendance')}><Text style={[S.sidebarLinkText, currentScreen === 'attendance' && { color: C.accent }]}>📅  Attendance</Text></TouchableOpacity>}
+              {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'labor' && S.sidebarLinkActive]} onPress={() => navigateTo('labor')}><Text style={[S.sidebarLinkText, currentScreen === 'labor' && { color: C.accent }]}>🔧  Labor</Text></TouchableOpacity>}
+              {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'parts' && S.sidebarLinkActive]} onPress={() => navigateTo('parts')}><Text style={[S.sidebarLinkText, currentScreen === 'parts' && { color: C.accent }]}>🔩  Parts</Text></TouchableOpacity>}
             </View>
             <TouchableOpacity style={S.sidebarLogoutBtn} onPress={handleLogout}><Text style={{ color: '#fff', fontWeight: '800', letterSpacing: 0.5 }}>🚪  LOGOUT</Text></TouchableOpacity>
           </SafeAreaView>
@@ -854,8 +858,14 @@ export default function App() {
             isDark={isDark}
             onCardPress={(card) => { setCurrentScreen('home'); setTimeout(() => setSelectedCard(card), 300); }}
           />
-        ) : currentScreen === 'admin' ? (
-          <AdminScreen adminPartTab={adminPartTab} setAdminPartTab={setAdminPartTab} dbPartsCatalog={dbPartsCatalog} newGroupName={newGroupName} setNewGroupName={setNewGroupName} handleAddGroup={handleAddGroup} selectedAdminGroupId={selectedAdminGroupId} setSelectedAdminGroupId={setSelectedAdminGroupId} newItemName={newItemName} setNewItemName={setNewItemName} handleAddItem={handleAddItem} handleDeleteGroup={handleDeleteGroup} handleDeleteItem={handleDeleteItem} onUsersChanged={setUsersList} />
+        ) : currentScreen === 'staff' ? (
+          <StaffScreen onBack={() => setCurrentScreen('home')} isDark={isDark} onUsersChanged={setUsersList} />
+        ) : currentScreen === 'attendance' ? (
+          <AttendanceScreen onBack={() => setCurrentScreen('home')} isDark={isDark} />
+        ) : currentScreen === 'labor' ? (
+          <LaborScreen onBack={() => setCurrentScreen('home')} isDark={isDark} apiKey={API_KEY} />
+        ) : currentScreen === 'parts' ? (
+          <PartsScreen onBack={() => setCurrentScreen('home')} isDark={isDark} dbPartsCatalog={dbPartsCatalog} newGroupName={newGroupName} setNewGroupName={setNewGroupName} handleAddGroup={handleAddGroup} selectedAdminGroupId={selectedAdminGroupId} setSelectedAdminGroupId={setSelectedAdminGroupId} newItemName={newItemName} setNewItemName={setNewItemName} handleAddItem={handleAddItem} handleDeleteGroup={handleDeleteGroup} handleDeleteItem={handleDeleteItem} />
         ) : currentScreen === 'settings' ? (
           <SettingsScreen currentUser={currentUser} setCurrentUser={setCurrentUser} newPassword={newPassword} setNewPassword={setNewPassword} changeProfilePic={changeProfilePic} handleProfileUpdate={handleProfileUpdate} />
         ) : (
