@@ -38,6 +38,8 @@ import AttendanceScreen from './src/screens/AttendanceScreen';
 import LaborScreen from './src/screens/LaborScreen';
 import PartsScreen from './src/screens/PartsScreen';
 import AttendanceReminderModal from './src/components/AttendanceReminderModal';
+import TodoReminderModal from './src/components/TodoReminderModal';
+import { ensureTodoNotificationChannel, scheduleTodoReminder, cancelTodoReminder } from './src/utils/todoReminders';
 import FinanceScreen from './src/screens/FinanceScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import TodoScreen from './src/screens/TodoScreen';
@@ -121,6 +123,8 @@ export default function App() {
   const [staffList,      setStaffList]      = useState([]);
   const [activityLogs,   setActivityLogs]   = useState([]);
   const [allTodoCards,   setAllTodoCards]   = useState([]);
+  const [standaloneTodos, setStandaloneTodos] = useState([]); // to-do's created outside a job card (Phase 4)
+  const [activeReminderTodo, setActiveReminderTodo] = useState(null); // to-do currently shown in the reminder response modal
   const [dbPartsCatalog, setDbPartsCatalog] = useState([]);
   const [financeSummary, setFinanceSummary] = useState({ totalOutstanding: 0, unpaidCount: 0 });
   const [totalActiveCount, setTotalActiveCount] = useState(0); // ← FIX 2: Add this state
@@ -232,10 +236,24 @@ export default function App() {
     };
 
     registerPushToken();
+    ensureTodoNotificationChannel();
+    fetchStandaloneTodos();
 
     // Notification tap කරනකොට relevant card open කරනවා
     responseListener.current = Notifications.addNotificationResponseReceivedListener(async response => {
-      const cardId = response.notification.request.content.data?.cardId;
+      const data = response.notification.request.content.data || {};
+      if (data.todoId) {
+        try {
+          const res = await axios.get(`${API_BASE}/todos`);
+          const found = (res.data || []).find(t => t._id === data.todoId);
+          setCurrentScreen('todos');
+          setTimeout(() => setActiveReminderTodo(found || { _id: data.todoId, text: response.notification.request.content.body, priority: 'Normal' }), 300);
+        } catch (e) {
+          console.log('Notification todo fetch error:', e);
+        }
+        return;
+      }
+      const cardId = data.cardId;
       if (cardId) {
         try {
           // State eke nathnam backend eken direct fetch karanawa
@@ -262,6 +280,49 @@ export default function App() {
       const res = await axios.get(`${API_BASE}/jobcards/todos`);
       setAllTodoCards(res.data || []);
     } catch (e) { console.log('todos fetch error', e); }
+    fetchStandaloneTodos();
+  };
+
+  // ── Standalone To-Do's (Phase 4 — decoupled from job cards) ──────
+  const fetchStandaloneTodos = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/todos`);
+      const list = res.data || [];
+      setStandaloneTodos(list);
+      list.forEach(t => scheduleTodoReminder(t));
+    } catch (e) { console.log('standalone todos fetch error', e); }
+  };
+
+  const createStandaloneTodo = async (text, priority) => {
+    try {
+      const res = await axios.post(`${API_BASE}/todos`, { text, priority, nextReminderAt: new Date(Date.now() + 60 * 60000).toISOString() });
+      setStandaloneTodos(prev => [res.data, ...prev]);
+      scheduleTodoReminder(res.data);
+    } catch (e) { Alert.alert('Error', 'Failed to create to-do'); }
+  };
+
+  const markTodoDone = async (id) => {
+    try {
+      await axios.put(`${API_BASE}/todos/${id}`, { completed: true });
+      setStandaloneTodos(prev => prev.filter(t => t._id !== id));
+      cancelTodoReminder(id);
+    } catch (e) { Alert.alert('Error', 'Failed to update to-do'); }
+  };
+
+  const snoozeTodo = async (id, whenDate) => {
+    try {
+      const res = await axios.put(`${API_BASE}/todos/${id}`, { nextReminderAt: whenDate.toISOString() });
+      setStandaloneTodos(prev => prev.map(t => t._id === id ? res.data : t));
+      scheduleTodoReminder(res.data);
+    } catch (e) { Alert.alert('Error', 'Failed to reschedule reminder'); }
+  };
+
+  const deleteStandaloneTodo = async (id) => {
+    try {
+      await axios.delete(`${API_BASE}/todos/${id}`);
+      setStandaloneTodos(prev => prev.filter(t => t._id !== id));
+      cancelTodoReminder(id);
+    } catch (e) { Alert.alert('Error', 'Failed to delete to-do'); }
   };
 
   useEffect(() => { checkLoginStatus(); }, []);
@@ -734,9 +795,9 @@ export default function App() {
   // ── Derived counts ──────────────────────────────────────────────
   const activeCount  = jobCards.filter(c => !INACTIVE_STATUSES.includes(c.status)).length;
   // todoCount uses allTodoCards when loaded (all todos from backend), else falls back to loaded cards
-  const todoCount    = allTodoCards.length > 0
+  const todoCount    = (allTodoCards.length > 0
     ? allTodoCards.length
-    : jobCards.filter(c => (c.todos || []).some(t => !t.completed)).length;
+    : jobCards.filter(c => (c.todos || []).some(t => !t.completed)).length) + standaloneTodos.length;
   const todoCards    = allTodoCards.length > 0 ? allTodoCards : jobCards.filter(c => (c.todos || []).some(t => !t.completed));
 
   // ── #6 Sort — Active (newest first) → Inactive+Todos → Inactive (no todos) ──
@@ -854,9 +915,13 @@ export default function App() {
         ) : currentScreen === 'todos' ? (
           <TodoScreen
             todoCards={todoCards}
+            standaloneTodos={standaloneTodos}
             onBack={() => setCurrentScreen('home')}
             isDark={isDark}
             onCardPress={(card) => { setCurrentScreen('home'); setTimeout(() => setSelectedCard(card), 300); }}
+            onCreateTodo={createStandaloneTodo}
+            onOpenReminder={(todo) => setActiveReminderTodo(todo)}
+            onDeleteTodo={deleteStandaloneTodo}
           />
         ) : currentScreen === 'staff' ? (
           <StaffScreen onBack={() => setCurrentScreen('home')} isDark={isDark} onUsersChanged={setUsersList} />
@@ -923,6 +988,13 @@ export default function App() {
 
         {/* ── MODALS ──────────────────────────────────────── */}
         <AttendanceReminderModal staffList={staffList} BRAND="#16a34a" apiKey={API_KEY} forDate={sundayDate || undefined} />
+
+        <TodoReminderModal
+          todo={activeReminderTodo}
+          onClose={() => setActiveReminderTodo(null)}
+          onMarkDone={() => { markTodoDone(activeReminderTodo._id); setActiveReminderTodo(null); }}
+          onSnooze={(when) => { snoozeTodo(activeReminderTodo._id, when); setActiveReminderTodo(null); }}
+        />
 
         <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} isDark={isDark} usersList={staffList} />
 
