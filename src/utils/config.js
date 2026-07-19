@@ -1,9 +1,13 @@
 // src/utils/config.js
 // Single source of truth for API configuration.
-// Change API_BASE or API_KEY here — updates everywhere automatically.
+// Change API_BASE here — updates everywhere automatically.
+// API_KEY comes from an EAS environment variable (app.config.js `extra.apiSecretKey`),
+// not hardcoded here — see `eas env:list` on this project.
+
+import Constants from 'expo-constants';
 
 export const API_BASE = 'https://visco-api.onrender.com/api';
-export const API_KEY  = 'ViscoApp_SuperSecretKey_2026';
+export const API_KEY  = Constants.expoConfig?.extra?.apiSecretKey || '';
 
 // Axios default header — set once in App.js:
 // import axios from 'axios';

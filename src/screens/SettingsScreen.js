@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { API_KEY } from '../utils/config';
 
 const API_BASE_URL = 'https://visco-api.onrender.com';
-const API_KEY      = 'ViscoApp_SuperSecretKey_2026';
 
 export default function SettingsScreen({ currentUser, setCurrentUser, newPassword, setNewPassword, changeProfilePic, handleProfileUpdate }) {
 

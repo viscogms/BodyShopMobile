@@ -1,0 +1,60 @@
+require('dotenv').config();
+
+module.exports = ({ config }) => ({
+  ...config,
+  expo: {
+    name: "BodyShopMobile",
+    slug: "BodyShopMobile",
+    version: "1.0.0",
+    orientation: "portrait",
+    icon: "./assets/logo.png",
+    userInterfaceStyle: "light",
+    ios: {
+      supportsTablet: true,
+      bundleIdentifier: "com.viscoeran.BodyShopMobile",
+      buildNumber: "1"
+    },
+    android: {
+      softwareKeyboardLayoutMode: "resize",
+      adaptiveIcon: {
+        foregroundImage: "./assets/logo.png",
+        backgroundColor: "#000000"
+      },
+      package: "com.viscoeran.BodyShopMobile",
+      versionCode: 1,
+      permissions: [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ]
+    },
+    web: {
+      favicon: "./assets/logo.png"
+    },
+    plugins: [
+      "@react-native-community/datetimepicker",
+      [
+        "expo-notifications",
+        {
+          icon: "./assets/logo.png",
+          color: "#16a34a",
+          sounds: []
+        }
+      ]
+    ],
+    updates: {
+      url: "https://u.expo.dev/f064bf74-a83a-48bc-94a0-053206800be5",
+      checkAutomatically: "ON_LOAD",
+      fallbackToCacheTimeout: 0
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    },
+    extra: {
+      eas: {
+        projectId: "f064bf74-a83a-48bc-94a0-053206800be5"
+      },
+      apiSecretKey: process.env.API_SECRET_KEY
+    },
+    owner: "viscoeran"
+  }
+});
