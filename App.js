@@ -42,6 +42,7 @@ import TodoReminderModal from './src/components/TodoReminderModal';
 import { ensureTodoNotificationChannel, scheduleTodoReminder, cancelTodoReminder } from './src/utils/todoReminders';
 import FinanceScreen from './src/screens/FinanceScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
+import JobCardsScreen from './src/screens/JobCardsScreen';
 import TodoScreen from './src/screens/TodoScreen';
 
 const API_BASE = _API_BASE;
@@ -130,6 +131,15 @@ export default function App() {
   const [totalActiveCount, setTotalActiveCount] = useState(0); // ← FIX 2: Add this state
   const [pinnedCardId, setPinnedCardId] = useState(null); // ✅ New/clone card top ekata pin karanawa
   const pinnedCardIdRef = useRef(null); // Async context eke access karanawa
+  const [checkMode,         setCheckMode]         = useState(false); // Vehicle Check — twice-daily availability walk-around
+  const [checkedIds,        setCheckedIds]        = useState(new Set());
+  const [checkCards,        setCheckCards]        = useState([]);
+  const [checkLoading,      setCheckLoading]      = useState(false);
+  const [checkPanelVisible, setCheckPanelVisible] = useState(false); // in-progress panel is collapsible via FAB
+  // cardChangeEvent notifies independently-fetched screens (e.g. JobCardsScreen) whenever a card
+  // mutates elsewhere, so they can patch/remove locally instead of requiring a manual refresh.
+  const [cardChangeEvent, setCardChangeEvent] = useState(null);
+  const [printGenerating,   setPrintGenerating]   = useState(false);
 
   const [newGroupName,          setNewGroupName]          = useState('');
   const [newSubGroupName,       setNewSubGroupName]       = useState('');
@@ -194,7 +204,7 @@ export default function App() {
   const [formData, setFormData] = useState({
     jobCardDate: defaultDateTime, customerPrefix: 'Mr.', plateNumber: '', carModel: '', companyName: '',
     customerName: '', customerContact: '', customerContacts: [''], jobCardNo: '', vin: '', odoKM: '',
-    carNotStart: false, quoteDone: false, approvalDone: false,
+    carNotStart: false, quoteDone: false, approvalDone: false, currentlyAvailable: true,
     receiveDate: defaultDateTime, deliveryDate: defaultDateTime, reminderTime: '',
     customerVoice: [''], inspectionTech: '', jobDoneBy: '', located: 'Main Body Shop',
     invoiceNo: '', invoiceAmount: '', paidAmount: '', paymentStatus: 'Pending',
@@ -392,6 +402,7 @@ export default function App() {
 
   useEffect(() => {
     const backAction = () => {
+      if (checkMode)                 { cancelVehicleCheck(); return true; }
       if (isSidebarOpen)            { toggleSidebar(); return true; }
       if (showUserModal)             { setShowUserModal(false); return true; }
       if (fullScreenImg)             { setFullScreenImg(null); return true; }
@@ -407,7 +418,7 @@ export default function App() {
     };
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
     return () => backHandler.remove();
-  }, [selectedCard, showForm, showContactModal, showStatusDropdown, showCalc, fullScreenImg, showPrintModal, isSidebarOpen, currentScreen, showUserModal, activeNavGroup]);
+  }, [selectedCard, showForm, showContactModal, showStatusDropdown, showCalc, fullScreenImg, showPrintModal, isSidebarOpen, currentScreen, showUserModal, activeNavGroup, checkMode, checkedIds]);
 
   // ── FIX 2: New function to fetch total active count from backend ──
   const fetchActiveCount = async () => {
@@ -430,7 +441,7 @@ export default function App() {
   const fetchJobCards = async (pageNum = 1, query = '') => {
     try {
       if (pageNum === 1) setLoading(true);
-      const res = await axios.get(`${API_URL}?page=${pageNum}&limit=15&search=${query}`);
+      const res = await axios.get(`${API_URL}?page=${pageNum}&limit=15&search=${query}&currentlyAvailable=true`);
       if (pageNum === 1) {
         const currentPinnedId = pinnedCardIdRef.current;
         if (currentPinnedId) {
@@ -547,10 +558,85 @@ export default function App() {
   };
   const toggleUserActive    = async (user) => { try { setLoading(true); await axios.put(`${API_BASE}/users/${user._id}`, { isActive: !user.isActive }); axios.get(`${API_BASE}/users`).then(r => setUsersList(r.data)); } catch (e) { Alert.alert("Error", "Update failed"); } finally { setLoading(false); } };
 
-  const handleSaveFinanceAmount = async (card, invAmount, paidAmt, invNo) => { const pStatus = Number(paidAmt) >= Number(invAmount) && Number(invAmount) > 0 ? 'Paid' : (Number(paidAmt) > 0 ? 'Partial' : 'Pending'); const updatedCard = { ...card, invoiceAmount: invAmount, paidAmount: paidAmt, invoiceNo: invNo, paymentStatus: pStatus }; setSelectedCard(updatedCard); setJobCards(prev => prev.map(c => c._id === card._id ? updatedCard : c)); try { await axios.put(`${API_URL}/${card._id}`, { invoiceAmount: Number(invAmount || 0), paidAmount: Number(paidAmt || 0), invoiceNo: invNo, paymentStatus: pStatus, laborCharges: Number(card.laborCharges || 0) }); fetchFinanceAndParts(); Alert.alert("Success", "Billing updated successfully!"); } catch(e) { Alert.alert("Error", "Billing save failed"); } };
-  const handleUpdateStatusFromDetail = async (card, newStatus) => { if (!hasPerm('canUpdateStatus')) return Alert.alert("Restricted", "You do not have permission to change status."); const updatedCard = { ...card, status: newStatus }; setSelectedCard(updatedCard); setJobCards(prev => prev.map(c => c._id === card._id ? updatedCard : c)); try { await axios.put(`${API_URL}/${card._id}`, { status: newStatus }); } catch (e) { Alert.alert("Error", "Failed to update."); } };
-  const handleTogglePartReceived = async (card, idx) => { if (!hasPerm('canEditCard')) return Alert.alert("Restricted", "No permission."); const updatedDetails = [...(card.inspectionDetails || [])]; const dec = decodePart(updatedDetails[idx]); dec.received = !dec.received; updatedDetails[idx] = encodePart(dec.name, dec.received); const updatedCard = { ...card, inspectionDetails: updatedDetails }; setSelectedCard(updatedCard); setJobCards(prev => prev.map(c => c._id === card._id ? updatedCard : c)); try { await axios.put(`${API_URL}/${card._id}`, { inspectionDetails: updatedDetails }); } catch (e) {} };
-  const handleToggleVoiceCompleted = async (card, idx) => { if (!hasPerm('canEditCard')) return Alert.alert("Restricted", "No permission."); const updatedVoices = [...(card.customerVoice || [])]; let target = updatedVoices[idx]; if (typeof target === 'string') { target = { text: target, completed: true }; } else { target = { ...target, completed: !target.completed }; } updatedVoices[idx] = target; const updatedCard = { ...card, customerVoice: updatedVoices }; setSelectedCard(updatedCard); setJobCards(prev => prev.map(c => c._id === card._id ? updatedCard : c)); try { await axios.put(`${API_URL}/${card._id}`, { customerVoice: updatedVoices }); } catch(err) {} };
+  // Patches a card in every locally-cached list (open detail modal + Dashboard's jobCards)
+  // and notifies independently-fetched screens (e.g. JobCardsScreen) via cardChangeEvent,
+  // so a change made anywhere shows up everywhere without a manual refresh.
+  const patchCardLocally = (id, patch) => {
+    setSelectedCard(prev => prev && prev._id === id ? { ...prev, ...patch } : prev);
+    setJobCards(prev => prev.map(c => c._id === id ? { ...c, ...patch } : c));
+    setCardChangeEvent({ type: 'update', id, patch, ts: Date.now() });
+  };
+  const removeCardLocally = (id) => {
+    setSelectedCard(prev => prev && prev._id === id ? null : prev);
+    setJobCards(prev => prev.filter(c => c._id !== id));
+    setCardChangeEvent({ type: 'delete', id, ts: Date.now() });
+  };
+
+  const handleSaveFinanceAmount = async (card, invAmount, paidAmt, invNo) => { const pStatus = Number(paidAmt) >= Number(invAmount) && Number(invAmount) > 0 ? 'Paid' : (Number(paidAmt) > 0 ? 'Partial' : 'Pending'); patchCardLocally(card._id, { invoiceAmount: invAmount, paidAmount: paidAmt, invoiceNo: invNo, paymentStatus: pStatus }); try { await axios.put(`${API_URL}/${card._id}`, { invoiceAmount: Number(invAmount || 0), paidAmount: Number(paidAmt || 0), invoiceNo: invNo, paymentStatus: pStatus, laborCharges: Number(card.laborCharges || 0) }); fetchFinanceAndParts(); Alert.alert("Success", "Billing updated successfully!"); } catch(e) { Alert.alert("Error", "Billing save failed"); } };
+  const handleUpdateStatusFromDetail = async (card, newStatus) => { if (!hasPerm('canUpdateStatus')) return Alert.alert("Restricted", "You do not have permission to change status."); patchCardLocally(card._id, { status: newStatus }); try { await axios.put(`${API_URL}/${card._id}`, { status: newStatus }); } catch (e) { Alert.alert("Error", "Failed to update."); } };
+
+  // ── Vehicle availability ──────────────────────────────────────────
+  const handleToggleAvailable = async (card) => {
+    const next = !card.currentlyAvailable;
+    const updatedCard = { ...card, currentlyAvailable: next };
+    setSelectedCard(updatedCard);
+    setJobCards(prev => {
+      if (!next) return prev.filter(c => c._id !== card._id); // Dashboard is availability-filtered — hide it immediately once unavailable
+      const exists = prev.some(c => c._id === card._id);
+      // Card may not be in Dashboard's list at all (e.g. toggled from the Job Cards screen) — add it, don't just update.
+      return exists ? prev.map(c => c._id === card._id ? updatedCard : c) : [updatedCard, ...prev];
+    });
+    setCardChangeEvent({ type: 'update', id: card._id, patch: { currentlyAvailable: next }, ts: Date.now() });
+    try { await axios.put(`${API_URL}/${card._id}`, { currentlyAvailable: next }); }
+    catch (e) { Alert.alert("Error", "Failed to update availability."); }
+  };
+
+  // ── Vehicle Check — twice-daily walk-around to confirm what's physically on-site ──
+  const startVehicleCheck = async () => {
+    try {
+      setCheckLoading(true);
+      const res = await axios.get(`${API_BASE}/jobcards/available`);
+      setCheckCards(res.data || []);
+      setCheckedIds(new Set());
+      setCheckMode(true);
+      setCheckPanelVisible(true);
+    } catch (e) { Alert.alert("Error", "Could not load available vehicles."); }
+    finally { setCheckLoading(false); }
+  };
+  const toggleCheckSelect = (id) => {
+    setCheckedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+  const cancelVehicleCheck = () => {
+    const doCancel = () => { setCheckMode(false); setCheckCards([]); setCheckedIds(new Set()); setCheckPanelVisible(false); };
+    if (checkedIds.size > 0) {
+      Alert.alert("Cancel Vehicle Check?", "Your progress on this check will be lost.", [
+        { text: "Keep Checking", style: "cancel" },
+        { text: "Cancel Check", style: "destructive", onPress: doCancel },
+      ]);
+    } else doCancel();
+  };
+  const finishVehicleCheck = () => {
+    const uncheckedCards = checkCards.filter(c => !checkedIds.has(String(c._id)));
+    const proceed = async () => {
+      setCheckLoading(true);
+      const results = await Promise.allSettled(
+        uncheckedCards.map(c => axios.put(`${API_URL}/${c._id}`, { currentlyAvailable: false, status: 'Delivered' }))
+      );
+      const failures = results.filter(r => r.status === 'rejected').length;
+      setCheckMode(false); setCheckCards([]); setCheckedIds(new Set()); setCheckLoading(false); setCheckPanelVisible(false);
+      setPage(1); fetchJobCards(1, searchQuery); fetchFinanceAndParts();
+      if (failures > 0) Alert.alert("Partly Saved", `${failures} vehicle(s) failed to update — please check them again.`);
+    };
+    if (uncheckedCards.length === 0) { proceed(); return; }
+    Alert.alert(
+      "Finish Vehicle Check?",
+      `${uncheckedCards.length} vehicle(s) not checked will be marked as Delivered and removed from the available list.`,
+      [{ text: "Keep Checking", style: "cancel" }, { text: "Finish", style: "destructive", onPress: proceed }]
+    );
+  };
+
+  const handleTogglePartReceived = async (card, idx) => { if (!hasPerm('canEditCard')) return Alert.alert("Restricted", "No permission."); const updatedDetails = [...(card.inspectionDetails || [])]; const dec = decodePart(updatedDetails[idx]); dec.received = !dec.received; updatedDetails[idx] = encodePart(dec.name, dec.received); patchCardLocally(card._id, { inspectionDetails: updatedDetails }); try { await axios.put(`${API_URL}/${card._id}`, { inspectionDetails: updatedDetails }); } catch (e) {} };
+  const handleToggleVoiceCompleted = async (card, idx) => { if (!hasPerm('canEditCard')) return Alert.alert("Restricted", "No permission."); const updatedVoices = [...(card.customerVoice || [])]; let target = updatedVoices[idx]; if (typeof target === 'string') { target = { text: target, completed: true }; } else { target = { ...target, completed: !target.completed }; } updatedVoices[idx] = target; patchCardLocally(card._id, { customerVoice: updatedVoices }); try { await axios.put(`${API_URL}/${card._id}`, { customerVoice: updatedVoices }); } catch(err) {} };
   const initiateDirectReminderUpdate = (card) => { if (!hasPerm('canEditCard')) return Alert.alert("Restricted", "No permission."); setDirectReminderCard(card); setTempDateObj(new Date()); setShowDirectReminderDatePicker(true); };
 
   const handleSave = async () => {
@@ -574,6 +660,7 @@ export default function App() {
         const res = await axios.put(`${API_URL}/${editId}`, finalData);
         savedCard = res.data;
         setJobCards(prev => prev.map(c => c._id === editId ? res.data : c));
+        setCardChangeEvent({ type: 'update', id: editId, patch: res.data, ts: Date.now() });
         fetchJobCards(1, '');
       } else {
         const res = await axios.post(API_URL, finalData);
@@ -581,6 +668,12 @@ export default function App() {
         setJobCards(prev => [res.data, ...prev]);
         setPinnedCardId(res.data._id);
         fetchFinanceAndParts();
+        if (checkMode) {
+          // Vehicle just found during a Check walk-around — fold it into the current session
+          // so it isn't immediately flagged Delivered by this same Finish pass.
+          setCheckCards(prev => [res.data, ...prev]);
+          setCheckedIds(prev => new Set(prev).add(String(res.data._id)));
+        }
       }
       setShowForm(false);
       setPage(1);
@@ -616,7 +709,7 @@ export default function App() {
       customerContact: loadedContacts.length > 0 ? loadedContacts[0] : '',
       customerContacts: loadedContacts, companyName: card.companyName || '',
       customerVoice: card.customerVoice?.length > 0 ? [...card.customerVoice.map(v => typeof v === 'object' ? (v.text || '') : (v || '')), ''] : [''],
-      status: 'Inspection', quoteDone: false, approvalDone: false,
+      status: 'Inspection', quoteDone: false, approvalDone: false, currentlyAvailable: true,
       receiveDate: defaultDateTime, deliveryDate: defaultDateTime, reminderTime: '',
       inspectionTech: card.inspectionTech || '', jobDoneBy: card.jobDoneBy || '',
       invoiceNo: '', invoiceAmount: '', paidAmount: '', paymentStatus: 'Pending', laborCharges: '',
@@ -632,11 +725,11 @@ export default function App() {
     loadedCustomParts.push(''); setPartSelections(loadedSelections); setCustomParts(loadedCustomParts); setPartStatuses({}); setQuickVoice({ engineOil: false, completeCheckup: false }); setFormTab('info'); setSelectedCard(null); setShowForm(true);
   };
 
-  const handleDelete = (id) => { Alert.alert("Delete", "Are you sure you want to delete this Job Card?", [{ text: "Cancel" }, { text: "Delete", style: "destructive", onPress: async () => { await axios.delete(`${API_URL}/${id}`); setSelectedCard(null); setPage(1); fetchJobCards(1, ''); } }]); };
+  const handleDelete = (id) => { Alert.alert("Delete", "Are you sure you want to delete this Job Card?", [{ text: "Cancel" }, { text: "Delete", style: "destructive", onPress: async () => { await axios.delete(`${API_URL}/${id}`); removeCardLocally(id); setPage(1); fetchJobCards(1, ''); } }]); };
 
   const resetForm = () => {
     setIsEditing(false); setEditId(null); setFormTab('info'); setPartSelections({}); setCustomParts(['']); setPartStatuses({}); setQuickVoice({ engineOil: false, completeCheckup: false }); setActiveNavGroup(null); setActiveNavSubGroup(null);
-    setFormData({ jobCardDate: defaultDateTime, customerPrefix: 'Mr.', plateNumber: '', carModel: '', companyName: '', customerName: '', customerContact: '', customerContacts: [''], jobCardNo: '', vin: '', odoKM: '', carNotStart: false, quoteDone: false, approvalDone: false, receiveDate: defaultDateTime, deliveryDate: defaultDateTime, reminderTime: '', customerVoice: [''], inspectionTech: '', jobDoneBy: '', located: 'Main Body Shop', invoiceNo: '', invoiceAmount: '', paidAmount: '', paymentStatus: 'Pending', laborCharges: '', rearImage: [], vinImage: [], odoImage: [], inspectionPhotos: [], status: 'Inspection' });
+    setFormData({ jobCardDate: defaultDateTime, customerPrefix: 'Mr.', plateNumber: '', carModel: '', companyName: '', customerName: '', customerContact: '', customerContacts: [''], jobCardNo: '', vin: '', odoKM: '', carNotStart: false, quoteDone: false, approvalDone: false, currentlyAvailable: true, receiveDate: defaultDateTime, deliveryDate: defaultDateTime, reminderTime: '', customerVoice: [''], inspectionTech: '', jobDoneBy: '', located: 'Main Body Shop', invoiceNo: '', invoiceAmount: '', paidAmount: '', paymentStatus: 'Pending', laborCharges: '', rearImage: [], vinImage: [], odoImage: [], inspectionPhotos: [], status: 'Inspection' });
   };
 
   const toggleCatalogPart       = (partString) => setPartSelections(prev => ({ ...prev, [partString]: !prev[partString] }));
@@ -708,13 +801,13 @@ export default function App() {
   };
 
   const requestPricingWhatsApp = (card) => { const parts = (card.inspectionDetails || []).map(p => decodePart(p)).filter(d => d.name).map(d => `- ${d.name}`).join('\n'); const msg = `*Visco Body Shop - Parts Inquiry*\nVehicle: ${getCleanModelText(card.carModel)}\nVIN: ${card.vin || 'N/A'}\n\n*Required Parts for Pricing:*\n${parts || 'No specific parts listed.'}`; Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`).catch(() => Alert.alert("Error", "WhatsApp is not installed.")); };
-  const printPDF = async (type) => {
+  // ── Print currently-available vehicles (own snapshot fetch — Dashboard's grid is paginated) ──
+  const printAvailablePDF = async (type) => {
     try {
       setShowPrintModal(false);
-      setLoading(true);
-      // Fetch all active job cards (up to 500)
-      const res = await axios.get(`${API_URL}?page=1&limit=500`);
-      const activeCards = res.data.filter(c => !INACTIVE_STATUSES.includes(c.status));
+      setPrintGenerating(true);
+      const res = await axios.get(`${API_BASE}/jobcards/available`);
+      const activeCards = res.data || [];
       const now = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
       let bodyHtml = '';
@@ -770,8 +863,8 @@ export default function App() {
       const html = `<html><body style="font-family:Arial,sans-serif;padding:20px;color:#333">
         <div style="text-align:center;border-bottom:3px solid #16a34a;padding-bottom:14px;margin-bottom:18px">
           <h2 style="margin:0;color:#14532d;font-size:20px">VISCO BODY SHOP</h2>
-          <p style="color:#16a34a;margin:4px 0;font-weight:700;font-size:13px">ACTIVE JOB CARDS REPORT</p>
-          <p style="color:#999;font-size:11px;margin:2px 0">Generated: ${now} &nbsp;|&nbsp; Total Active: ${activeCards.length}</p>
+          <p style="color:#16a34a;margin:4px 0;font-weight:700;font-size:13px">CURRENTLY AVAILABLE VEHICLES</p>
+          <p style="color:#999;font-size:11px;margin:2px 0">Generated: ${now} &nbsp;|&nbsp; Total: ${activeCards.length}</p>
         </div>
         ${bodyHtml}
       </body></html>`;
@@ -781,7 +874,7 @@ export default function App() {
     } catch(e) {
       Alert.alert("Error", "Failed to generate report. Please try again.");
     } finally {
-      setLoading(false);
+      setPrintGenerating(false);
     }
   };
 
@@ -845,6 +938,7 @@ export default function App() {
             </View>
             <View style={S.sidebarMenu}>
               <TouchableOpacity style={[S.sidebarLink, currentScreen === 'home'     && S.sidebarLinkActive]} onPress={() => navigateTo('home')}><Text style={[S.sidebarLinkText, currentScreen === 'home'     && { color: C.accent }]}>🏠  Dashboard</Text></TouchableOpacity>
+              {currentUser?.role !== 'Owner' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'available' && S.sidebarLinkActive]} onPress={() => navigateTo('available')}><Text style={[S.sidebarLinkText, currentScreen === 'available' && { color: C.accent }]}>📇  Job Cards</Text></TouchableOpacity>}
               {currentUser?.role !== 'Owner' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'settings' && S.sidebarLinkActive]} onPress={() => navigateTo('settings')}><Text style={[S.sidebarLinkText, currentScreen === 'settings' && { color: C.accent }]}>⚙️  Profile Settings</Text></TouchableOpacity>}
               {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'finance' && S.sidebarLinkActive]} onPress={() => navigateTo('finance')}><Text style={[S.sidebarLinkText, currentScreen === 'finance' && { color: C.accent }]}>💵  Finance Report</Text></TouchableOpacity>}
               {currentUser?.role === 'Admin' && <TouchableOpacity style={[S.sidebarLink, currentScreen === 'reports' && S.sidebarLinkActive]} onPress={() => navigateTo('reports')}><Text style={[S.sidebarLinkText, currentScreen === 'reports' && { color: C.accent }]}>📊  Earnings Report</Text></TouchableOpacity>}
@@ -923,6 +1017,13 @@ export default function App() {
             onOpenReminder={(todo) => setActiveReminderTodo(todo)}
             onDeleteTodo={deleteStandaloneTodo}
           />
+        ) : currentScreen === 'available' ? (
+          <JobCardsScreen
+            onBack={() => setCurrentScreen('home')}
+            isDark={isDark}
+            onCardPress={(card) => setSelectedCard(card)}
+            cardChangeEvent={cardChangeEvent}
+          />
         ) : currentScreen === 'staff' ? (
           <StaffScreen onBack={() => setCurrentScreen('home')} isDark={isDark} onUsersChanged={setUsersList} />
         ) : currentScreen === 'attendance' ? (
@@ -939,17 +1040,24 @@ export default function App() {
           ) : (
             <FlatList
               style={{ backgroundColor: isDark ? '#0f1117' : '#f0fdf4' }}
-              data={sortedJobCards}
+              data={checkMode ? checkCards : sortedJobCards}
               keyExtractor={(item) => String(item._id)}
               numColumns={3}
               columnWrapperStyle={S.rowWrapper}
-              refreshing={refreshing}
-              onRefresh={handlePullToRefresh}
-              onEndReached={handleLoadMore}
+              refreshing={checkMode ? false : refreshing}
+              onRefresh={checkMode ? undefined : handlePullToRefresh}
+              onEndReached={checkMode ? undefined : handleLoadMore}
               onEndReachedThreshold={0.5}
               renderItem={({ item }) => (
                 <View style={{ width: CARD_WIDTH }}>
-                  <JobCardItem item={item} onPress={setSelectedCard} isDark={isDark} />
+                  <JobCardItem
+                    item={item}
+                    onPress={setSelectedCard}
+                    isDark={isDark}
+                    selectionMode={checkMode}
+                    selected={checkedIds.has(String(item._id))}
+                    onToggleSelect={toggleCheckSelect}
+                  />
                 </View>
               )}
               contentContainerStyle={S.flatListPadding}
@@ -960,10 +1068,40 @@ export default function App() {
         {/* ── FAB BUTTONS ─────────────────────────────────── */}
         {currentScreen === 'home' && (
           <View style={S.floatingActionGroup}>
-            {currentUser?.role !== 'Owner' && <AnimatedIconBtn icon="🧮" onPress={() => setShowCalc(true)}       isDark={isDark} />}
-            {currentUser?.role !== 'Owner' && <AnimatedIconBtn icon="🖨️" onPress={() => setShowPrintModal(true)} isDark={isDark} />}
-            <AnimatedIconBtn icon="🔍" onPress={toggleSearch} isDark={isDark} />
+            {!checkMode && currentUser?.role !== 'Owner' && <AnimatedIconBtn icon="🧮" onPress={() => setShowCalc(true)}       isDark={isDark} />}
+            {!checkMode && <AnimatedIconBtn icon="🔍" onPress={toggleSearch} isDark={isDark} />}
+            {!checkMode && currentUser?.role !== 'Owner' && <AnimatedIconBtn icon="🖨️" onPress={() => setShowPrintModal(true)} isDark={isDark} />}
+            {currentUser?.role !== 'Owner' && (
+              !checkMode ? (
+                <AnimatedIconBtn icon="🚗" onPress={() => !checkLoading && startVehicleCheck()} isDark={isDark} />
+              ) : (
+                <View style={{ position: 'relative' }}>
+                  <AnimatedIconBtn icon={checkPanelVisible ? '🔽' : '🚗'} onPress={() => setCheckPanelVisible(v => !v)} isDark={isDark} />
+                  <View style={S.checkFabBadge}>
+                    <Text style={S.checkFabBadgeText}>{checkedIds.size}/{checkCards.length}</Text>
+                  </View>
+                </View>
+              )
+            )}
             {hasPerm('canCreateCard') && <AddFabButton onPress={() => { resetForm(); setShowForm(true); }} isDark={isDark} />}
+          </View>
+        )}
+
+        {/* ── VEHICLE CHECK IN-PROGRESS PANEL — collapsible via FAB ── */}
+        {currentScreen === 'home' && checkMode && checkPanelVisible && (
+          <View style={S.financeBannerBox}>
+            <View>
+              <Text style={S.financeBannerTitle}>🚗  VEHICLE CHECK IN PROGRESS</Text>
+              <Text style={S.financeBannerSub}>{checkedIds.size} of {checkCards.length} confirmed present</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity onPress={cancelVehicleCheck} style={{ paddingHorizontal: 10, paddingVertical: 6 }}>
+                <Text style={{ color: '#ef4444', fontWeight: '800', fontSize: 12 }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={finishVehicleCheck} disabled={checkLoading} style={{ backgroundColor: '#16a34a', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                {checkLoading ? <ActivityIndicator color="#fff" size="small" /> : <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>Finish</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -996,7 +1134,7 @@ export default function App() {
           onSnooze={(when) => { snoozeTodo(activeReminderTodo._id, when); setActiveReminderTodo(null); }}
         />
 
-        <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} isDark={isDark} usersList={staffList} />
+        <JobCardDetailModal selectedCard={selectedCard} setSelectedCard={setSelectedCard} currentUser={currentUser} hasPerm={hasPerm} onClose={() => setSelectedCard(null)} handleEdit={handleEdit} handleClone={handleClone} handleDelete={handleDelete} handleSaveFinanceAmount={handleSaveFinanceAmount} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} printInspectionReportPDF={printInspectionReportPDF} requestPricingWhatsApp={requestPricingWhatsApp} setFullScreenImg={setFullScreenImg} handleTogglePartReceived={handleTogglePartReceived} formatSafeDate={formatSafeDate} initiateDirectReminderUpdate={initiateDirectReminderUpdate} handleToggleVoiceCompleted={handleToggleVoiceCompleted} handleToggleAvailable={handleToggleAvailable} isDark={isDark} usersList={staffList} />
 
         <JobCardFormModal showForm={showForm} setShowForm={setShowForm} isEditing={isEditing} handleSave={handleSave} loading={loading} formTab={formTab} setFormTab={setFormTab} formData={formData} setFormData={setFormData} setDropdownMode={setDropdownMode} setShowStatusDropdown={setShowStatusDropdown} showJobCardDatePicker={showJobCardDatePicker} setShowJobCardDatePicker={setShowJobCardDatePicker} showDeliveryDatePicker={showDeliveryDatePicker} setShowDeliveryDatePicker={setShowDeliveryDatePicker} tempDateObj={tempDateObj} setTempDateObj={setTempDateObj} showReminderDatePicker={showReminderDatePicker} setShowReminderDatePicker={setShowReminderDatePicker} showReminderTimePicker={showReminderTimePicker} setShowReminderTimePicker={setShowReminderTimePicker} renderImageSection={renderNewImageSection} openContactList={openContactList} quickVoice={quickVoice} setQuickVoice={setQuickVoice} updateDynamicList={updateDynamicList} activeNavGroup={activeNavGroup} setActiveNavGroup={setActiveNavGroup} activeNavSubGroup={activeNavSubGroup} setActiveNavSubGroup={setActiveNavSubGroup} dbPartsCatalog={dbPartsCatalog} partSelections={partSelections} toggleCatalogPart={toggleCatalogPart} customParts={customParts} updateDynamicCustomPart={updateDynamicCustomPart} removeCustomPart={removeCustomPart} usersList={usersList} isDark={isDark} />
 
@@ -1055,9 +1193,10 @@ export default function App() {
           <View style={S.modalOverlay}>
             <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setShowPrintModal(false)} />
             <View style={[S.dropdownModalBox, { padding: 28 }]}>
-              <Text style={{ fontWeight: '800', fontSize: 17, marginBottom: 18, textAlign: 'center', color: isDark ? '#f1f5f9' : '#000' }}>Print Active Schedules</Text>
-              <TouchableOpacity style={S.printOptionBtn} onPress={() => printPDF('grid')}><Text style={{ fontSize: 22, marginRight: 14 }}>🖼️</Text><Text style={S.printOptionTitle}>Grid View Report</Text></TouchableOpacity>
-              <TouchableOpacity style={S.printOptionBtn} onPress={() => printPDF('table')}><Text style={{ fontSize: 22, marginRight: 14 }}>📊</Text><Text style={S.printOptionTitle}>Active Jobs Report</Text></TouchableOpacity>
+              <Text style={{ fontWeight: '800', fontSize: 17, marginBottom: 18, textAlign: 'center', color: isDark ? '#f1f5f9' : '#000' }}>Print Available Vehicles</Text>
+              <TouchableOpacity style={S.printOptionBtn} onPress={() => printAvailablePDF('grid')} disabled={printGenerating}><Text style={{ fontSize: 22, marginRight: 14 }}>🖼️</Text><Text style={S.printOptionTitle}>Grid View Report</Text></TouchableOpacity>
+              <TouchableOpacity style={S.printOptionBtn} onPress={() => printAvailablePDF('table')} disabled={printGenerating}><Text style={{ fontSize: 22, marginRight: 14 }}>📊</Text><Text style={S.printOptionTitle}>Table Report</Text></TouchableOpacity>
+              {printGenerating && <ActivityIndicator color="#16a34a" style={{ marginTop: 10 }} />}
             </View>
           </View>
         </Modal>

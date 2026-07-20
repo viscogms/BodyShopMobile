@@ -127,6 +127,14 @@ export const getStyles = (isDark) => {
       elevation: 6, borderRadius: 12,
       borderWidth: 1, borderColor: C.border,
     },
+    checkFabBadge: {
+      position: 'absolute', top: -4, right: -4,
+      backgroundColor: '#16a34a', borderRadius: 8,
+      paddingHorizontal: 4, minWidth: 16, height: 16,
+      justifyContent: 'center', alignItems: 'center',
+      borderWidth: 1.5, borderColor: isDark ? '#0f1117' : '#ffffff',
+    },
+    checkFabBadgeText: { color: '#fff', fontSize: 8, fontWeight: '900' },
     mainFab: {
       width: 52, height: 52,
       backgroundColor: C.accent,

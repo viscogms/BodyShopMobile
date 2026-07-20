@@ -357,9 +357,13 @@ export default function JobCardFormModal({
                   <Text style={{ fontWeight: '700', color: '#ef4444' }}>Car Not Start When Arrived?</Text>
                   <Switch value={formData.carNotStart} onValueChange={(v) => setFormData({ ...formData, carNotStart: v })} trackColor={{ true: "#ef4444" }} />
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
                   <Text style={{ fontWeight: '700', color: '#16a34a' }}>Quotation Done?</Text>
                   <Switch value={formData.quoteDone} onValueChange={(v) => setFormData({ ...formData, quoteDone: v })} trackColor={{ true: "#16a34a" }} />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                  <Text style={{ fontWeight: '700', color: '#16a34a' }}>Currently Available at Garage?</Text>
+                  <Switch value={formData.currentlyAvailable} onValueChange={(v) => setFormData({ ...formData, currentlyAvailable: v })} trackColor={{ true: "#16a34a" }} />
                 </View>
               </View>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, TextInput, Alert, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, TextInput, Alert, Dimensions, ActivityIndicator, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image as ExpoImage } from 'expo-image';
 import axios from 'axios';
@@ -117,6 +117,7 @@ export default function JobCardDetailModal({
   setDropdownMode, setShowStatusDropdown, printInspectionReportPDF,
   setFullScreenImg, handleTogglePartReceived, requestPricingWhatsApp,
   formatSafeDate, initiateDirectReminderUpdate, handleToggleVoiceCompleted,
+  handleToggleAvailable,
   isDark = false, usersList = []
 }) {
   if (!selectedCard) return null;
@@ -279,6 +280,16 @@ export default function JobCardDetailModal({
                   {hasPerm('canUpdateStatus') && <Text style={{ fontSize: 11, marginLeft: 8, color: C.textSub }}>▼ Edit</Text>}
                 </TouchableOpacity>
               </View>
+              {hasPerm('canUpdateStatus') && (
+                <View style={S.detailRowMetric}>
+                  <Text style={S.lightLabelText}>Currently Available at Garage</Text>
+                  <Switch
+                    value={!!selectedCard.currentlyAvailable}
+                    onValueChange={() => handleToggleAvailable(selectedCard)}
+                    trackColor={{ true: '#16a34a' }}
+                  />
+                </View>
+              )}
               <DetailRow label="Job Card No"     value={selectedCard.jobCardNo} />
               <DetailRow label="Vehicle Model"   value={getCleanModelText(selectedCard.carModel)} />
               <DetailRow label="Chassis No"      value={selectedCard.vin} />

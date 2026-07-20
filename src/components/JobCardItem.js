@@ -4,7 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { parseImagesToArray, getCustomerNameOnly, getStatusColor } from '../utils/helpers';
 import { INACTIVE_STATUSES } from '../utils/constants';
 
-export default function JobCardItem({ item, onPress, isDark = false }) {
+export default function JobCardItem({ item, onPress, isDark = false, selectionMode = false, selected = false, onToggleSelect }) {
   const rearImg     = parseImagesToArray(item.rearImage)[0];
   const displayName = getCustomerNameOnly(item.carModel) || '';
   const isInactive  = INACTIVE_STATUSES.includes(item.status);
@@ -31,8 +31,9 @@ export default function JobCardItem({ item, onPress, isDark = false }) {
         styles.card,
         { backgroundColor: cardBg, borderColor: borderClr },
         isInactive && styles.inactiveCard,
+        selectionMode && selected && styles.selectedCard,
       ]}
-      onPress={() => onPress(item)}
+      onPress={() => selectionMode ? onToggleSelect(String(item._id)) : onPress(item)}
       activeOpacity={0.75}
     >
       {/* Image area */}
@@ -74,6 +75,13 @@ export default function JobCardItem({ item, onPress, isDark = false }) {
         {todoCount > 0 && (
           <View style={styles.todoBadge}>
             <Text style={styles.todoTxt}>{todoCount}</Text>
+          </View>
+        )}
+
+        {/* Selection checkbox */}
+        {selectionMode && (
+          <View style={[styles.checkBadge, selected && styles.checkBadgeSelected]}>
+            <Text style={{ color: selected ? '#fff' : 'transparent', fontSize: 13, fontWeight: '900' }}>✓</Text>
           </View>
         )}
       </View>
@@ -118,6 +126,28 @@ const styles = StyleSheet.create({
   },
   inactiveCard: {
     opacity: 0.38,
+  },
+  selectedCard: {
+    borderColor: '#16a34a',
+    borderWidth: 2,
+    backgroundColor: 'rgba(22,163,74,0.08)',
+  },
+  checkBadge: {
+    position: 'absolute',
+    bottom: 5,
+    left: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+  },
+  checkBadgeSelected: {
+    backgroundColor: '#16a34a',
+    borderColor: '#16a34a',
   },
   imageWrap: {
     width: '100%',
