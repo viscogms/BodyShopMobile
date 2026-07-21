@@ -389,12 +389,12 @@ export default function AttendanceScreen({ onBack, isDark = false }) {
             .catch(() => {});
     }, []);
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: isDark ? '#0a0c12' : '#f4f7f8' }} edges={['top', 'left', 'right']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: isDark ? '#0a0c12' : '#f4f7f8' }} edges={['left', 'right']}>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 2, backgroundColor: '#ffffff', borderBottomColor: BRAND_COLOR }}>
                 <TouchableOpacity onPress={onBack} style={{ paddingRight: 14, paddingVertical: 4 }}>
                     <Text style={{ color: BRAND_COLOR, fontSize: 22 }}>‹</Text>
                 </TouchableOpacity>
-                <Text style={{ color: '#14532d', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 }}>📅 Attendance</Text>
+                <Text style={{ color: '#14532d', fontSize: 18, fontWeight: '900', letterSpacing: 0.3 }}>📅 Attendance</Text>
             </View>
             <ScrollView style={{ flex: 1, padding: 15 }} keyboardShouldPersistTaps="handled">
                 <AttendanceSection staffList={staffList} BRAND={BRAND_COLOR} API_KEY={API_KEY} />

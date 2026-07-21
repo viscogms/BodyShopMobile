@@ -145,7 +145,7 @@ export default function ReportsScreen({ onBack, isDark = false, onCardPress }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['left', 'right']}>
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: '#ffffff', borderBottomColor: '#16a34a' }]}>
@@ -233,7 +233,7 @@ export default function ReportsScreen({ onBack, isDark = false, onCardPress }) {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 2 },
   backBtn: { paddingRight: 14, paddingVertical: 4 },
-  headerTitle: { color: '#14532d', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 },
+  headerTitle: { color: '#14532d', fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSub: { color: '#7c6fae', fontSize: 10, fontWeight: '600', marginTop: 1 },
   pdfBtn: { backgroundColor: '#16a34a', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
   pdfBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },

@@ -48,7 +48,7 @@ export default function JobCardsScreen({ onBack, isDark = false, onCardPress, ca
   const handleLoadMore = () => { if (hasMore && !loading && !refreshing) { const next = page + 1; setPage(next); fetchCards(next, searchQuery); } };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['left', 'right']}>
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: '#ffffff', borderBottomColor: '#16a34a' }]}>
@@ -109,7 +109,7 @@ export default function JobCardsScreen({ onBack, isDark = false, onCardPress, ca
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 2 },
   backBtn: { paddingRight: 14, paddingVertical: 4 },
-  headerTitle: { color: '#14532d', fontSize: 15, fontWeight: '900', letterSpacing: 0.3 },
+  headerTitle: { color: '#14532d', fontSize: 18, fontWeight: '900', letterSpacing: 0.3 },
   headerSub: { color: '#4d7c5f', fontSize: 10, fontWeight: '600', marginTop: 1 },
   searchWrap: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 8, borderBottomWidth: 1 },
   searchInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, borderWidth: 1, borderRadius: 8 },

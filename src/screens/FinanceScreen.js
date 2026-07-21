@@ -160,7 +160,7 @@ export default function FinanceScreen({ onBack, isDark = false, onCardPress }) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: bg }} edges={['left', 'right']}>
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: '#0a0c12', borderBottomColor: '#16a34a' }]}>
@@ -261,7 +261,7 @@ export default function FinanceScreen({ onBack, isDark = false, onCardPress }) {
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
   backBtn: { paddingRight: 14, paddingVertical: 4 },
-  headerTitle: { color: '#ffffff', fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
+  headerTitle: { color: '#ffffff', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
   headerSub: { color: '#475569', fontSize: 10, fontWeight: '600', marginTop: 1 },
   pdfBtn: { backgroundColor: '#16a34a', paddingHorizontal: 14, paddingVertical: 8 },
   pdfBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
